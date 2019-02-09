@@ -4,7 +4,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.autograd import Variable
 
-from interval import Interval, Symbolic_interval
+from .interval import Interval, Symbolic_interval
 
 
 class Interval_Dense(nn.Module):
@@ -150,6 +150,7 @@ class Interval_Flatten(nn.Module):
 			return ix
 
 
+
 class Flatten(nn.Module):
 	def forward(self, x):
 		return x.view(x.size(0), -1)
@@ -177,3 +178,67 @@ class Interval_network(nn.Module):
 			ix = layer(ix)
 
 		return ix
+
+
+
+def naive_interval_analyze(model, epsilon, X, y):
+
+	# Transfer original model to interval models
+	inet = Interval_network(model)
+
+	ix = Interval(torch.clamp(X-epsilon, 0.0, 1.0),\
+					torch.clamp(X+epsilon, 0.0, 1.0))
+
+	ix = (inet(ix))
+	wc =  ix.worst_case(y)
+	#print (wc)
+	#print (ix.mask)
+
+	iloss = nn.CrossEntropyLoss()(wc, y)
+	ierr = (wc.max(1)[1]!=y).type(torch.Tensor)
+	ierr = ierr.sum().item()/X.shape[0]
+
+	print ("naive avg width per label:", wc.sum()/X.shape[0]/10)
+
+	return iloss, ierr
+
+
+
+def sym_interval_analyze(model, epsilon, X, y):
+
+	# Transfer original model to interval models
+	inet = Interval_network(model)
+
+	iloss = 0
+	ierr = 0
+	width_per_label = 0
+
+	for xi, yi in zip(X,y):
+
+		ix = Symbolic_interval(torch.clamp(xi.unsqueeze(0)-epsilon,0.0,1.0),\
+					torch.clamp(xi.unsqueeze(0)+epsilon,0.0,1.0))
+		#ix = Symbolic_interval(xi.unsqueeze(0)-epsilon,xi.unsqueeze(0)+epsilon)
+
+		ix = inet(ix)
+
+		# wc is the worst case output returned by symbolic interval analysis
+		wc = (ix.worst_case(yi.unsqueeze(0)))
+
+		width_per_label += wc.sum()
+
+		# You can get the mask for each layer in ix.mask
+		#print (ix.mask)
+
+		iloss += nn.CrossEntropyLoss()(wc, yi.unsqueeze(0))
+		ierr += (wc.max(1)[1]!=yi).type(torch.Tensor)
+
+	iloss /= X.shape[0]
+	ierr /= X.shape[0]
+
+	print ("sym avg width per label:", width_per_label/X.shape[0]/10)
+
+	return iloss, ierr
+
+
+
+

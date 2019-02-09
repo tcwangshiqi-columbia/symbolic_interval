@@ -29,13 +29,15 @@ class Interval():
 		string += "\nlower:"+str(self.l)
 		string += "\nupper:"+str(self.u)
 		return string
-	'''
-	def worst_cast(self, y):
-		t = self.l[:, y]
-		u = self.u-t
-		u[:,y] = 0
-		return u
-	'''
+	
+	def worst_case(self, y):
+		assert y.shape[0] == self.l.shape[0] == self.u.shape[0], "wrong input shape"
+		u = torch.zeros(self.u.shape)
+		for i in range(y.shape[0]):
+			t = self.l[i, y[i]]
+			u[i] = self.u[i]-t
+			u[i, y[i]] = 0.0
+		return u	
 
 
 class Symbolic_interval(Interval):
@@ -45,10 +47,8 @@ class Symbolic_interval(Interval):
 		self.n = list(self.c[0].reshape(-1).size())[0]
 
 		self.idep = torch.eye(self.n)*self.e.reshape(-1,1)
-
 		self.edep = torch.zeros((1, self.n))
 		
-
 
 	def concretize(self):
 		self.extend()
@@ -70,7 +70,7 @@ class Symbolic_interval(Interval):
 		self.edep = self.edep.reshape(tuple([-1]+self.shape))
 
 	def worst_case(self, y):
-
+		assert y.shape[0] == self.l.shape[0] == self.u.shape[0], "wrong input shape"
 		#print (self.c.shape, self.idep.shape, self.edep.shape)
 		c_t = self.c[:,y]
 		self.c = self.c - c_t
