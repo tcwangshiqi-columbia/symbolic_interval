@@ -7,7 +7,7 @@ import setproctitle
 import torchvision.transforms as transforms
 import torchvision.datasets as datasets
 
-from Symb_interval.interval import Interval, Symbolic_interval
+#from Symb_interval.interval import Interval, Symbolic_interval
 from Symb_interval.symbolic_network import *
 from convex_adversarial import robust_loss	
 import time
@@ -89,7 +89,7 @@ if __name__ == '__main__':
 		print ("sym loss:", iloss)
 		print ("sym err:", ierr)
 		print("sym time per sample:", (time.time()-start)/X.shape[0])
-		
+
 		exit()
 
 

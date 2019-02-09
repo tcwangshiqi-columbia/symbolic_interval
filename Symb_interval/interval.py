@@ -82,6 +82,7 @@ class Symbolic_interval(Interval):
 		return self.u 
 
 
+
 class Crown(Interval):
 	def __init__(self, lower, upper):
 		Interval.__init__(self, lower, upper)
@@ -93,13 +94,11 @@ class Crown(Interval):
 		self.edep = torch.zeros((1, self.n))
 
 
+
 class Zonotope(Interval):
 	def __init__(self, lower, upper):
 		Interval.__init__(self, lower, upper)
 		raise NotImplementedError
-
-
-
 		
 
 
