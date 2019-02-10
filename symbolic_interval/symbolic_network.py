@@ -1,3 +1,19 @@
+'''
+Interval networks and symbolic interval propagations.
+Top contributor: Shiqi Wang
+The basic network structures are inspired by the implementations of
+Eric Wong's convex polytope github available at:
+https://github.com/locuslab/convex_adversarial
+
+Usage: 
+for symbolic interval anlysis:
+	from symbolic_interval.symbolic_network import sym_interval_analyze
+for naive interval analysis:
+	from symbolic_interval.symbolic_network import sym_interval_analyze
+'''
+
+from __future__ import print_function
+
 import numpy as np
 import torch
 import torch.nn as nn
@@ -7,11 +23,41 @@ from torch.autograd import Variable
 from .interval import Interval, Symbolic_interval
 
 
+class Interval_network(nn.Module):
+	'''Convert a nn.Sequential model to a network support symbolic
+	interval propagations/naive interval propagations.
+	'''
+	def __init__(self, model):
+		nn.Module.__init__(self)
+
+		self.net = []
+		for layer in model:
+			if(isinstance(layer, nn.Linear)):
+				self.net.append(Interval_Dense(layer))
+			if(isinstance(layer, nn.ReLU)):
+				self.net.append(Interval_ReLU(layer))
+			if(isinstance(layer, nn.Conv2d)):
+				self.net.append(Interval_Conv2d(layer))
+			if 'Flatten' in (str(layer.__class__.__name__)): 
+				self.net.append(Interval_Flatten())
+
+	'''Forward intervals for each layer.
+
+	* :attr:`ix` is the input fore each layer. If ix is a naive
+	interval, it will propagate naively. If ix is a symbolic interval,
+	it will propagate symbolicly.
+	'''
+	def forward(self, ix):
+		for i, layer in enumerate(self.net):
+			ix = layer(ix)
+
+		return ix
+
+
 class Interval_Dense(nn.Module):
 	def __init__(self, layer):
 		nn.Module.__init__(self)
 		self.layer = layer
-		#print ("linear:", self.layer.weight.shape)
 
 	def forward(self, ix):
 		
@@ -40,8 +86,6 @@ class Interval_Dense(nn.Module):
 			#return F.linear(x, self.layer.weight, bias=self.layer.bias)
 			ix.update_lu(c-e, c+e)
 			return ix
-
-
 
 
 class Interval_Conv2d(nn.Module):
@@ -133,7 +177,6 @@ class Interval_ReLU(nn.Module):
 			ix.mask.append(mask)
 			ix.update_lu(F.relu(ix.l), F.relu(ix.u))
 			return ix
-		
 
 
 class Interval_Flatten(nn.Module):
@@ -150,37 +193,17 @@ class Interval_Flatten(nn.Module):
 			return ix
 
 
+'''Naive interval propagations.
 
-class Flatten(nn.Module):
-	def forward(self, x):
-		return x.view(x.size(0), -1)
+Args:
+	model: regular nn.Sequential models
+	epsilon: desired input ranges
+	X and y: samples and lables
 
-
-
-class Interval_network(nn.Module):
-	def __init__(self, model):
-		nn.Module.__init__(self)
-		#self.net = [layer for layer in model]
-		
-		self.net = []
-		for layer in model:
-			if(isinstance(layer, nn.Linear)):
-				self.net.append(Interval_Dense(layer))
-			if(isinstance(layer, nn.ReLU)):
-				self.net.append(Interval_ReLU(layer))
-			if(isinstance(layer, nn.Conv2d)):
-				self.net.append(Interval_Conv2d(layer))
-			if 'Flatten' in (str(layer.__class__.__name__)): 
-				self.net.append(Interval_Flatten())
-		
-	def forward(self, ix):
-		for i, layer in enumerate(self.net):
-			ix = layer(ix)
-
-		return ix
-
-
-
+Return:
+	iloss: robust loss provided by naive interval analysis
+	ierr: verifiable robust error provided by naive interval analysis
+'''
 def naive_interval_analyze(model, epsilon, X, y):
 
 	# Transfer original model to interval models
@@ -203,7 +226,17 @@ def naive_interval_analyze(model, epsilon, X, y):
 	return iloss, ierr
 
 
+'''Symbolic interval propagations.
 
+Args:
+	model: regular nn.Sequential models
+	epsilon: desired input ranges
+	X and y: samples and lables
+
+Return:
+	iloss: robust loss provided by symbolic interval analysis
+	ierr: verifiable robust error provided by symbolic interval analysis
+'''
 def sym_interval_analyze(model, epsilon, X, y):
 
 	# Transfer original model to interval models
@@ -213,15 +246,22 @@ def sym_interval_analyze(model, epsilon, X, y):
 	ierr = 0
 	width_per_label = 0
 
+	minimum = 0.0
+	maximum = 1.0
+
 	for xi, yi in zip(X,y):
 
-		ix = Symbolic_interval(torch.clamp(xi.unsqueeze(0)-epsilon,0.0,1.0),\
-					torch.clamp(xi.unsqueeze(0)+epsilon,0.0,1.0))
-		#ix = Symbolic_interval(xi.unsqueeze(0)-epsilon,xi.unsqueeze(0)+epsilon)
+		ix = Symbolic_interval(\
+			   torch.clamp(xi.unsqueeze(0)-epsilon, minimum, maximum),\
+			   torch.clamp(xi.unsqueeze(0)+epsilon, minimum, maximum)
+		     )
+		#ix = Symbolic_interval(xi.unsqueeze(0)-epsilon,\
+			#xi.unsqueeze(0)+epsilon)
 
 		ix = inet(ix)
 
-		# wc is the worst case output returned by symbolic interval analysis
+		# wc is the worst case output returned by symbolic 
+		# interval analysis
 		wc = (ix.worst_case(yi.unsqueeze(0)))
 
 		width_per_label += wc.sum()

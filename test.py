@@ -1,18 +1,42 @@
+'''
+Test file for different sound propagation methods
+Top contributor: Shiqi Wang
+The basic network structures are inspired by the implementations of
+Eric Wong's convex polytope github available at:
+https://github.com/locuslab/convex_adversarial
+'''
+
+
+from __future__ import print_function
+
 import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.autograd import Variable
-import setproctitle
 import torchvision.transforms as transforms
 import torchvision.datasets as datasets
 
-#from Symb_interval.interval import Interval, Symbolic_interval
-from Symb_interval.symbolic_network import *
+from symbolic_interval.symbolic_network import Interval_network
+from symbolic_interval.symbolic_network import sym_interval_analyze
+from symbolic_interval.symbolic_network import naive_interval_analyze
+
 from convex_adversarial import robust_loss	
+
 import time
 
 
+'''Flatten layers.
+Please use this Flatten layer to flat the convolutional layers when 
+design your own models.
+'''
+class Flatten(nn.Module):
+	def forward(self, x):
+		return x.view(x.size(0), -1)
+
+'''Test MNIST models.
+Please use nn.Sequential to build the models.
+'''
 def mnist_model(): 
 	model = nn.Sequential(
 		nn.Conv2d(1, 16, 4, stride=2, padding=1),
@@ -38,6 +62,11 @@ SYM_INTERVAL = 1
 CROWN = 2
 
 
+'''main function of this test script.
+It compares the average tightness, loss, and efficiency of each
+propagation methods.
+You can test on you own models, desired epsilon, and batch_size.
+'''
 if __name__ == '__main__':
 	MODEL_NAME = "mnist_small_baseline.h5"
 	model = mnist_model()
@@ -45,7 +74,9 @@ if __name__ == '__main__':
 
 	#method = NAIVE_INTERVAL
 	epsilon = 0.1
-	train_loader, test_loader = mnist_loaders(10)
+	batch_size = 10
+
+	train_loader, test_loader = mnist_loaders(batch_size)
 
 	
 	for i, (X,y) in enumerate(test_loader):
