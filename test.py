@@ -51,10 +51,15 @@ def mnist_model():
 	return model
 
 def mnist_loaders(batch_size, shuffle_test=False): 
-	mnist_train = datasets.MNIST("./data", train=True, download=True, transform=transforms.ToTensor())
-	mnist_test = datasets.MNIST("./data", train=False, download=True, transform=transforms.ToTensor())
-	train_loader = torch.utils.data.DataLoader(mnist_train, batch_size=batch_size, shuffle=True, pin_memory=True)
-	test_loader = torch.utils.data.DataLoader(mnist_test, batch_size=batch_size, shuffle=shuffle_test, pin_memory=True)
+	mnist_train = datasets.MNIST("./data", train=True, download=True,\
+				transform=transforms.ToTensor())
+	mnist_test = datasets.MNIST("./data", train=False, download=True,\
+				transform=transforms.ToTensor())
+	train_loader = torch.utils.data.DataLoader(mnist_train,\
+				batch_size=batch_size, shuffle=True, pin_memory=True)
+	test_loader = torch.utils.data.DataLoader(mnist_test,\
+				batch_size=batch_size, shuffle=shuffle_test,\
+				pin_memory=True)
 	return train_loader, test_loader
 
 NAIVE_INTERVAL = 0
@@ -78,14 +83,17 @@ if __name__ == '__main__':
 
 	train_loader, test_loader = mnist_loaders(batch_size)
 
+	use_cuda = torch.cuda.is_available()
 	
 	for i, (X,y) in enumerate(test_loader):
 		
 		#if(method == ERIC_DUAL):
 		start = time.time()
-		eric_bound, eric_loss, eric_err =  robust_loss(model, epsilon, X, y)
+		eric_bound, eric_loss, eric_err = robust_loss(model,\
+									epsilon, X, y)
 
-		print ("eric avg width per label", eric_bound.sum()/X.shape[0]/10)
+		print ("eric avg width per label",\
+					eric_bound.sum()/X.shape[0]/10)
 		print ("eric loss", eric_loss)
 		print ("eric err:", eric_err)
 		print ("eric time per sample:", (time.time()-start)/X.shape[0])
@@ -98,17 +106,20 @@ if __name__ == '__main__':
 		#print("concrete propagation:", model(X))
 		loss = nn.CrossEntropyLoss()(f, y)
 		print("baseline loss:", loss)
-		print("baseline time per sample:", (time.time()-start)/X.shape[0])
+		print("baseline time per sample:",\
+					(time.time()-start)/X.shape[0])
 		print() 
 
 		#if(method == NAIVE_INTERVAL):
 		start = time.time()
 
-		iloss, ierr = naive_interval_analyze(model, epsilon, X, y)
+		iloss, ierr = naive_interval_analyze(model, epsilon,\
+					X, y, use_cuda)
 
 		print ("naive loss:", iloss)
 		print ("naive err:", ierr)
-		print ("naive time per sample:", (time.time()-start)/X.shape[0])
+		print ("naive time per sample:",\
+					(time.time()-start)/X.shape[0])
 		print()
 
 		#if(method == SYM_INTERVAL):
@@ -116,11 +127,13 @@ if __name__ == '__main__':
 		start = time.time()
 
 		inet = Interval_network(model)
-		iloss, ierr = sym_interval_analyze(model, epsilon, X, y)
+		iloss, ierr = sym_interval_analyze(model, epsilon,\
+					X, y, use_cuda)
 
 		print ("sym loss:", iloss)
 		print ("sym err:", ierr)
-		print("sym time per sample:", (time.time()-start)/X.shape[0])
+		print("sym time per sample:",\
+					(time.time()-start)/X.shape[0])
 
 		exit()
 

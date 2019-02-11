@@ -224,7 +224,7 @@ Return:
 	iloss: robust loss provided by naive interval analysis
 	ierr: verifiable robust error provided by naive interval analysis
 '''
-def naive_interval_analyze(model, epsilon, X, y):
+def naive_interval_analyze(model, epsilon, X, y, use_cuda=False):
 
 	# Transfer original model to interval models
 	inet = Interval_network(model)
