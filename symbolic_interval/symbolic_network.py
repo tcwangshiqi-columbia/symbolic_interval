@@ -143,9 +143,11 @@ class Interval_ReLU(nn.Module):
 			lower = ix.l
 			upper = ix.u
 			if(ix.use_cuda):
-				appr_condition = ((lower<0) * (upper>0)).type(torch.Tensor).cuda()
+				appr_condition = ((lower<0) * (upper>0)).type(\
+							torch.Tensor).cuda()
 			else:
-				appr_condition = ((lower<0) * (upper>0)).type(torch.Tensor)
+				appr_condition = ((lower<0) * (upper>0)).type(\
+							torch.Tensor)
 
 			mask = appr_condition*((upper)/(upper-lower+0.000001))
 			mask = mask + 1 - appr_condition
@@ -188,8 +190,12 @@ class Interval_ReLU(nn.Module):
 			lower = ix.l
 			upper = ix.u
 
-			appr_condition = ((lower<0) * (upper>0)).type(torch.Tensor)
-			if(ix.use_cuda): appr_condition = appr_condition.cuda()
+			if(ix.use_cuda):
+				appr_condition = ((lower<0) * (upper>0)).type(\
+							torch.Tensor).cuda()
+			else:
+				appr_condition = ((lower<0) * (upper>0)).type(\
+							torch.Tensor)
 
 			mask = appr_condition*((upper)/(upper-lower+0.000001))
 			mask = mask + 1 - appr_condition
