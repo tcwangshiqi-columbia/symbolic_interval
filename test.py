@@ -90,6 +90,7 @@ if __name__ == '__main__':
 		if(use_cuda):
 			X = X.cuda()
 			y = y.cuda().long()
+			model.cuda()
 
 		#if(method == ERIC_DUAL):
 		start = time.time()
