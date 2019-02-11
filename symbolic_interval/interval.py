@@ -102,6 +102,7 @@ class Interval():
 		assert y.shape[0] == self.l.shape[0] == self.u.shape[0],\
 				"wrong input shape"
 		u = torch.zeros(self.u.shape)
+		if(self.use_cuda): u = u.cuda()
 		for i in range(y.shape[0]):
 			t = self.l[i, y[i]]
 			u[i] = self.u[i]-t
