@@ -196,11 +196,13 @@ class Interval_ReLU(nn.Module):
 			else:
 				appr_condition = ((lower<0) * (upper>0)).type(\
 							torch.Tensor)
-			print(ix.use_cuda)
 
 			mask = appr_condition*((upper)/(upper-lower+0.000001))
 			mask = mask + 1 - appr_condition
-			mask = mask*(upper>0).type(torch.Tensor)
+			if(use_cuda):
+				mask = mask*((upper>0).type(torch.Tensor).cuda())
+			else:
+				mask = mask*(upper>0).type(torch.Tensor)
 			ix.mask.append(mask)
 			ix.update_lu(F.relu(ix.l), F.relu(ix.u))
 			return ix
