@@ -87,6 +87,10 @@ if __name__ == '__main__':
 	
 	for i, (X,y) in enumerate(test_loader):
 		
+		if(use_cuda):
+			X = X.cuda()
+			y = y.cuda.long()
+
 		#if(method == ERIC_DUAL):
 		start = time.time()
 		eric_bound, eric_loss, eric_err = robust_loss(model,\
