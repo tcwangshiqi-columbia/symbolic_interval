@@ -196,7 +196,6 @@ class Interval_ReLU(nn.Module):
 			else:
 				appr_condition = ((lower<0) * (upper>0)).type(\
 							torch.Tensor)
-			print (appr_condition)
 			print(ix.use_cuda)
 
 			mask = appr_condition*((upper)/(upper-lower+0.000001))
@@ -238,7 +237,9 @@ def naive_interval_analyze(model, epsilon, X, y, use_cuda=False):
 	inet = Interval_network(model)
 
 	ix = Interval(torch.clamp(X-epsilon, 0.0, 1.0),\
-					torch.clamp(X+epsilon, 0.0, 1.0))
+					torch.clamp(X+epsilon, 0.0, 1.0),\
+					use_cuda\
+				)
 
 	ix = (inet(ix))
 	wc =  ix.worst_case(y)
@@ -282,7 +283,7 @@ def sym_interval_analyze(model, epsilon, X, y, use_cuda=False):
 		ix = Symbolic_interval(\
 			   torch.clamp(xi.unsqueeze(0)-epsilon, minimum, maximum),\
 			   torch.clamp(xi.unsqueeze(0)+epsilon, minimum, maximum),\
-			   use_cuda
+			   use_cuda\
 		     )
 		#ix = Symbolic_interval(xi.unsqueeze(0)-epsilon,\
 			#xi.unsqueeze(0)+epsilon)
