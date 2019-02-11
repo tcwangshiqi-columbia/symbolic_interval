@@ -89,7 +89,7 @@ if __name__ == '__main__':
 		
 		if(use_cuda):
 			X = X.cuda()
-			y = y.cuda.long()
+			y = y.cuda().long()
 
 		#if(method == ERIC_DUAL):
 		start = time.time()
