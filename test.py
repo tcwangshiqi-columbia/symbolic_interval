@@ -87,6 +87,7 @@ if __name__ == '__main__':
 
 		print ("eric avg width per label", eric_bound.sum()/X.shape[0]/10)
 		print ("eric loss", eric_loss)
+		print ("eric err:", eric_err)
 		print ("eric time per sample:", (time.time()-start)/X.shape[0])
 		print()
 		

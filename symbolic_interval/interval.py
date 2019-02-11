@@ -49,13 +49,14 @@ class Interval():
 	  output will not change. Otherwise, this node is estimated during 
 	  interval propagation and will introduce overestimation error. 
 	'''
-	def __init__(self, lower, upper):
+	def __init__(self, lower, upper, use_cuda=False):
 		assert not ((upper-lower)<0).any(), "upper less than lower"
 		self.l = lower
 		self.u = upper
 		self.c = (lower+upper)/2
 		self.e = (upper-lower)/2
 		self.mask = []
+		self.use_cuda = use_cuda
 
 	def update_lu(self, lower, upper):
 		'''Update this interval with new lower and upper numpy matrix
@@ -143,15 +144,20 @@ class Symbolic_interval(Interval):
 	* :attr:`edep` keeps the error dependency introduced by each
 	  overestimated nodes.
 	'''
-	def __init__(self, lower, upper):
+	def __init__(self, lower, upper, use_cuda=False):
 		assert lower.shape[0]==upper.shape[0]==1, "each symbolic"+\
 					"should only contain one sample"
 		Interval.__init__(self, lower, upper)
 		self.shape = list(self.c.shape[1:])
 		self.n = list(self.c[0].reshape(-1).size())[0]
 
-		self.idep = torch.eye(self.n)*self.e.reshape(-1,1)
+		self.idep = torch.eye(self.n)
 		self.edep = torch.zeros((1, self.n))
+		self.use_cuda = use_cuda
+		if(self.use_cuda):
+			self.idep = self.idep.cuda()
+			self.edep = self.edep.cuda()
+		self.idep *= self.e.reshape(-1,1)
 		
 	'''Calculating the upper and lower matrix for symbolic intervals.
 	To make concretize easier, convolutional layer nodes will be 
@@ -162,6 +168,8 @@ class Symbolic_interval(Interval):
 		#print(self.idep.abs().sum(dim=0).shape,\
 				#self.edep.abs().sum(dim=0).shape)
 		e  = self.idep.abs().sum(dim=0)+self.edep.abs().sum(dim=0)
+		if(self.use_cuda):
+			e = e.cuda()
 		self.l = self.c - e
 		self.u = self.c + e
 		return self
@@ -189,6 +197,8 @@ class Symbolic_interval(Interval):
 	than the target label y's. 
 	'''
 	def worst_case(self, y):
+		if(self.use_cuda):
+			y = y.cuda().long()
 		assert y.shape[0] == self.l.shape[0] == self.u.shape[0],\
 					"wrong input shape"
 		#print (self.c.shape, self.idep.shape, self.edep.shape)

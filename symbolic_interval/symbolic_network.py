@@ -142,11 +142,19 @@ class Interval_ReLU(nn.Module):
 		if(isinstance(ix, Symbolic_interval)):
 			lower = ix.l
 			upper = ix.u
-			appr_condition = ((lower<0) * (upper>0)).type(torch.Tensor)
+			if(ix.use_cuda):
+				appr_condition = ((lower<0) * (upper>0)).type(torch.Tensor).cuda()
+			else:
+				appr_condition = ((lower<0) * (upper>0)).type(torch.Tensor)
 
 			mask = appr_condition*((upper)/(upper-lower+0.000001))
 			mask = mask + 1 - appr_condition
-			mask = mask*(upper>0).type(torch.Tensor)
+
+			if(ix.use_cuda):
+				mask = mask*((upper>0).type(torch.Tensor).cuda())
+			else:
+				mask = mask*(upper>0).type(torch.Tensor)
+
 			m = int(appr_condition.sum())
 			ix.mask.append(mask[0])
 
@@ -156,7 +164,17 @@ class Interval_ReLU(nn.Module):
 
 			appr_err = (appr*(-lower[0]))/2.0
 
-			error_row = torch.zeros((m, ix.n)).scatter_(1,\
+			if(ix.use_cuda):
+				error_row = torch.zeros((m, ix.n))
+				error_row = error_row.cuda()
+				if(m!=0):
+					error_row = error_row.scatter_(1,\
+						appr_ind, appr_err[appr_ind])
+			else:
+				
+				error_row = torch.zeros((m, ix.n))
+				if(m!=0):
+					error_row = error_row.scatter_(1,\
 						appr_ind, appr_err[appr_ind])
 
 			ix.c = ix.c*mask+appr_err.reshape(-1)
@@ -169,7 +187,9 @@ class Interval_ReLU(nn.Module):
 		if(isinstance(ix, Interval)):
 			lower = ix.l
 			upper = ix.u
+
 			appr_condition = ((lower<0) * (upper>0)).type(torch.Tensor)
+			if(ix.use_cuda): appr_condition = appr_condition.cuda()
 
 			mask = appr_condition*((upper)/(upper-lower+0.000001))
 			mask = mask + 1 - appr_condition
@@ -237,7 +257,7 @@ Return:
 	iloss: robust loss provided by symbolic interval analysis
 	ierr: verifiable robust error provided by symbolic interval analysis
 '''
-def sym_interval_analyze(model, epsilon, X, y):
+def sym_interval_analyze(model, epsilon, X, y, use_cuda=False):
 
 	# Transfer original model to interval models
 	inet = Interval_network(model)
@@ -253,7 +273,8 @@ def sym_interval_analyze(model, epsilon, X, y):
 
 		ix = Symbolic_interval(\
 			   torch.clamp(xi.unsqueeze(0)-epsilon, minimum, maximum),\
-			   torch.clamp(xi.unsqueeze(0)+epsilon, minimum, maximum)
+			   torch.clamp(xi.unsqueeze(0)+epsilon, minimum, maximum),\
+			   use_cuda
 		     )
 		#ix = Symbolic_interval(xi.unsqueeze(0)-epsilon,\
 			#xi.unsqueeze(0)+epsilon)
@@ -276,6 +297,12 @@ def sym_interval_analyze(model, epsilon, X, y):
 	ierr /= X.shape[0]
 
 	print ("sym avg width per label:", width_per_label/X.shape[0]/10)
+	if(use_cuda): 
+		#iloss = iloss.cpu().data.numpy()
+		ierr = ierr.cpu().data.numpy()[0]
+	else:
+		#iloss = iloss.data.numpy()
+		ierr = ierr.data.numpy()[0]
 
 	return iloss, ierr
 
