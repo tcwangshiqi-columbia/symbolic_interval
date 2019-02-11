@@ -79,7 +79,7 @@ if __name__ == '__main__':
 
 	#method = NAIVE_INTERVAL
 	epsilon = 0.1
-	batch_size = 10
+	batch_size = 2
 
 	train_loader, test_loader = mnist_loaders(batch_size)
 
