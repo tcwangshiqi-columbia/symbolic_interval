@@ -73,17 +73,21 @@ propagation methods.
 You can test on you own models, desired epsilon, and batch_size.
 '''
 if __name__ == '__main__':
+
+	use_cuda = torch.cuda.is_available()
+
 	MODEL_NAME = "mnist_small_baseline.h5"
 	model = mnist_model()
-	model = torch.load(MODEL_NAME, map_location={'cuda:0': 'cpu'})[0]
+	if(not use_cuda):
+		model = torch.load(MODEL_NAME, map_location={'cuda:0': 'cpu'})[0]
+	else:
+		model = torch.load(MODEL_NAME)[0]
 
 	#method = NAIVE_INTERVAL
 	epsilon = 0.1
 	batch_size = 10
 
-	train_loader, test_loader = mnist_loaders(batch_size)
-
-	use_cuda = torch.cuda.is_available()
+	train_loader, test_loader = mnist_loaders(batch_size)	
 	
 	for i, (X,y) in enumerate(test_loader):
 		
