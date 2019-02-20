@@ -149,18 +149,26 @@ class Interval_ReLU(nn.Module):
 				appr_condition = ((lower<0) * (upper>0)).type(\
 							torch.Tensor)
 			appr_condition = appr_condition.detach()
-
+			
 			mask = appr_condition*((upper)/(upper-lower+0.000001))
 			mask = mask + 1 - appr_condition
 			mask = mask.detach()
-
+			'''
 			if(ix.use_cuda):
 				mask = mask*((upper>0).type(torch.Tensor).\
 							cuda(device=ix.c.get_device()))
 			else:
 				mask = mask*(upper>0).type(torch.Tensor)
 			mask = mask.detach()
-
+			'''
+			mask = appr_condition*((upper)/(upper-lower+0.000001))
+			if(ix.use_cuda):
+				mask += (((upper>0)*(lower>0)).type(torch.Tensor).\
+							cuda(device=ix.c.get_device()))
+			else:
+				mask += ((upper>0)*(lower>0)).type(torch.Tensor)
+			mask = mask.detach()
+			
 			m = int(appr_condition.sum())
 			ix.mask.append(mask[0])
 
