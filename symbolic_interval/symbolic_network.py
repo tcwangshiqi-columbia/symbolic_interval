@@ -144,18 +144,22 @@ class Interval_ReLU(nn.Module):
 			upper = ix.u
 			if(ix.use_cuda):
 				appr_condition = ((lower<0) * (upper>0)).type(\
-							torch.Tensor).cuda()
+					torch.Tensor).cuda(device=ix.c.get_device())
 			else:
 				appr_condition = ((lower<0) * (upper>0)).type(\
 							torch.Tensor)
+			appr_condition = appr_condition.detach()
 
 			mask = appr_condition*((upper)/(upper-lower+0.000001))
 			mask = mask + 1 - appr_condition
+			mask = mask.detach()
 
 			if(ix.use_cuda):
-				mask = mask*((upper>0).type(torch.Tensor).cuda())
+				mask = mask*((upper>0).type(torch.Tensor).\
+							cuda(device=ix.c.get_device()))
 			else:
 				mask = mask*(upper>0).type(torch.Tensor)
+			mask = mask.detach()
 
 			m = int(appr_condition.sum())
 			ix.mask.append(mask[0])
@@ -168,7 +172,8 @@ class Interval_ReLU(nn.Module):
 
 			if(ix.use_cuda):
 				error_row = torch.zeros((m, ix.n))
-				error_row = error_row.cuda()
+				error_row = error_row.\
+					cuda(device=ix.c.get_device())
 				if(m!=0):
 					error_row = error_row.scatter_(1,\
 						appr_ind, appr_err[appr_ind])
@@ -192,7 +197,7 @@ class Interval_ReLU(nn.Module):
 
 			if(ix.use_cuda):
 				appr_condition = ((lower<0) * (upper>0)).type(\
-							torch.Tensor).cuda()
+					torch.Tensor).cuda(device=ix.c.get_device())
 			else:
 				appr_condition = ((lower<0) * (upper>0)).type(\
 							torch.Tensor)
@@ -200,7 +205,8 @@ class Interval_ReLU(nn.Module):
 			mask = appr_condition*((upper)/(upper-lower+0.000001))
 			mask = mask + 1 - appr_condition
 			if(ix.use_cuda):
-				mask = mask*((upper>0).type(torch.Tensor).cuda())
+				mask = mask*((upper>0).type(torch.Tensor).\
+					cuda(device=ix.c.get_device()))
 			else:
 				mask = mask*(upper>0).type(torch.Tensor)
 			ix.mask.append(mask)
@@ -233,7 +239,7 @@ Return:
 	iloss: robust loss provided by naive interval analysis
 	ierr: verifiable robust error provided by naive interval analysis
 '''
-def naive_interval_analyze(model, epsilon, X, y, use_cuda=False):
+def naive_interval_analyze(model, epsilon, X, y, use_cuda=True):
 
 	# Transfer original model to interval models
 	inet = Interval_network(model)
@@ -268,7 +274,7 @@ Return:
 	iloss: robust loss provided by symbolic interval analysis
 	ierr: verifiable robust error provided by symbolic interval analysis
 '''
-def sym_interval_analyze(model, epsilon, X, y, use_cuda=False):
+def sym_interval_analyze(model, epsilon, X, y, use_cuda=True):
 
 	# Transfer original model to interval models
 	inet = Interval_network(model)
