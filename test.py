@@ -78,6 +78,7 @@ if __name__ == '__main__':
 
 	MODEL_NAME = "mnist_small_baseline.h5"
 	model = mnist_model()
+	
 	if(not use_cuda):
 		model = torch.load(MODEL_NAME, map_location={'cuda:0': 'cpu'})[0]
 	else:
