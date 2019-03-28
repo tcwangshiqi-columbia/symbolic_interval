@@ -250,9 +250,11 @@ def naive_interval_analyze(model, epsilon, X, y, use_cuda=True):
 
 	# Transfer original model to interval models
 	inet = Interval_network(model)
+	minimum = X.min()
+	maximum = X.max()
 
-	ix = Interval(torch.clamp(X-epsilon, 0.0, 1.0),\
-					torch.clamp(X+epsilon, 0.0, 1.0),\
+	ix = Interval(torch.clamp(X-epsilon, minimum, maximum),\
+					torch.clamp(X+epsilon, minimum, maximum),\
 					use_cuda\
 				)
 
@@ -290,8 +292,8 @@ def sym_interval_analyze(model, epsilon, X, y, use_cuda=True):
 	ierr = 0
 	width_per_label = 0
 
-	minimum = 0.0
-	maximum = 1.0
+	minimum = X.min()
+	maximum = X.max()
 
 	for xi, yi in zip(X,y):
 
