@@ -70,7 +70,6 @@ class DualNetwork(nn.Module):
         for l in reversed(self.dual_net[1:]): 
             nu.append(l.T(*nu))
         dual_net = self.dual_net + [self.last_layer]
-        
         return sum(l.objective(*nu[:min(len(dual_net)-i+1, len(dual_net))]) for
            i,l in enumerate(dual_net))
 
@@ -93,7 +92,8 @@ class RobustBounds(nn.Module):
     def forward(self, X,y): 
         num_classes = self.net[-1].out_features
         dual = DualNetwork(self.net, X, self.epsilon, **self.kwargs)
-        c = Variable(torch.eye(num_classes).type_as(X)[y].unsqueeze(1) - torch.eye(num_classes).type_as(X).unsqueeze(0))
+        c = Variable(torch.eye(num_classes).type_as(X)[y].unsqueeze(1) -\
+                torch.eye(num_classes).type_as(X).unsqueeze(0))
         if X.is_cuda:
             c = c.cuda()
         f = -dual(c)

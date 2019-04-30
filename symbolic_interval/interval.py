@@ -58,6 +58,7 @@ class Interval():
 		self.mask = []
 		self.use_cuda = use_cuda
 
+
 	def update_lu(self, lower, upper):
 		'''Update this interval with new lower and upper numpy matrix
 
@@ -70,6 +71,7 @@ class Interval():
 		self.u = upper
 		self.c = (lower+upper)/2
 		self.e = (upper-lower)/2
+
 
 	def update_ce(self, center, error):
 		'''Update this interval with new error and center numpy matrix
@@ -84,6 +86,7 @@ class Interval():
 		self.u = self.c+self.e
 		self.l = self.c+self.e
 
+
 	def __str__(self):
 		'''Print function
 		'''
@@ -92,6 +95,7 @@ class Interval():
 		string += "\nupper:"+str(self.u)
 		return string
 	
+
 	def worst_case(self, y):
 		'''Calculate the wrost case of the analyzed output ranges.
 		In details, it returns the upper bound of other label minus 
@@ -101,13 +105,17 @@ class Interval():
 		'''
 		assert y.shape[0] == self.l.shape[0] == self.u.shape[0],\
 				"wrong input shape"
-		u = torch.zeros(self.u.shape)
+		if(self.use_cuda):
+			u = torch.zeros(self.u.shape, device=self.u.get_device())
+		else:
+			u = torch.zeros(self.u.shape)
 		if(self.use_cuda): u = u.cuda()
 		for i in range(y.shape[0]):
 			t = self.l[i, y[i]]
 			u[i] = self.u[i]-t
 			u[i, y[i]] = 0.0
 		return u	
+
 
 
 class Symbolic_interval(Interval):
@@ -146,49 +154,68 @@ class Symbolic_interval(Interval):
 	  overestimated nodes.
 	'''
 	def __init__(self, lower, upper, use_cuda=False):
-		assert lower.shape[0]==upper.shape[0]==1, "each symbolic"+\
-					"should only contain one sample"
+		assert lower.shape[0]==upper.shape[0], "each symbolic"+\
+					"should have the same shape"
+		
 		Interval.__init__(self, lower, upper)
+		self.use_cuda = use_cuda
 		self.shape = list(self.c.shape[1:])
 		self.n = list(self.c[0].reshape(-1).size())[0]
-
-		self.idep = torch.eye(self.n)
-		self.edep = torch.zeros((1, self.n))
-		self.use_cuda = use_cuda
+		self.input_size = self.n
+		self.batch_size = self.c.shape[0]
 		if(self.use_cuda):
-			self.idep = self.idep.cuda()
-			self.edep = self.edep.cuda()
-		self.idep *= self.e.reshape(-1,1)
+			self.idep = torch.eye(self.n, device=\
+					self.c.get_device()).unsqueeze(0)
+		else:
+			self.idep = torch.eye(self.n).unsqueeze(0)
+		self.edep = []
+		self.edep_ind = []
 		
+		
+
 	'''Calculating the upper and lower matrix for symbolic intervals.
 	To make concretize easier, convolutional layer nodes will be 
 	extended first.
 	'''
 	def concretize(self):
 		self.extend()
-		#print(self.idep.abs().sum(dim=0).shape,\
-				#self.edep.abs().sum(dim=0).shape)
-		e  = self.idep.abs().sum(dim=0)+self.edep.abs().sum(dim=0)
-		if(self.use_cuda):
-			e = e.cuda()
+		if(self.edep):
+			# first only assume only one relu layer
+			e = (self.idep*self.e.view(self.batch_size,\
+					self.input_size, 1)).abs().sum(dim=1)
+
+			for i in range(len(self.edep)):
+				e += self.edep_ind[i].t().mm(self.edep[i].abs())
+
+		else:
+			e = (self.idep*self.e.view(self.batch_size,\
+					self.input_size, 1)).abs().sum(dim=1)
+
 		self.l = self.c - e
 		self.u = self.c + e
+
 		return self
+
 
 	'''Extending convolutional layer nodes to a two-dimensional vector.
 	'''
 	def extend(self):
-		self.c = self.c.reshape(-1, self.n)
-		self.idep = self.idep.reshape(-1, self.n)
-		self.edep = self.edep.reshape(-1, self.n)
+		self.c = self.c.reshape(self.batch_size, self.n)
+		self.idep = self.idep.reshape(-1, self.input_size, self.n)
+
+		for i in range(len(self.edep)):
+			self.edep[i] = self.edep[i].reshape(-1, self.n)
+
 
 	'''Convert the extended layer back to the shape stored in `shape`.
 	'''
 	def shrink(self):
-		#print(self.shape)
 		self.c = self.c.reshape(tuple([-1]+self.shape))
 		self.idep = self.idep.reshape(tuple([-1]+self.shape))
-		self.edep = self.edep.reshape(tuple([-1]+self.shape))
+
+		for i in range(len(self.edep)):
+			self.edep[i] = self.edep[i].reshape(\
+				tuple([-1]+self.shape))
 
 
 	'''Calculate the wrost case of the analyzed output ranges.
@@ -197,19 +224,33 @@ class Symbolic_interval(Interval):
 	the worst case provided by interval analysis will never be larger
 	than the target label y's. 
 	'''
-	def worst_case(self, y):
+	def worst_case(self, y, output_size):
+
+		assert y.shape[0] == self.l.shape[0] == self.batch_size,\
+								"wrong label shape"
 		if(self.use_cuda):
-			y = y.cuda().long()
-		assert y.shape[0] == self.l.shape[0] == self.u.shape[0],\
-					"wrong input shape"
-		#print (self.c.shape, self.idep.shape, self.edep.shape)
-		c_t = self.c[:,y]
+			kk = torch.eye(output_size, dtype=torch.uint8,\
+				requires_grad=False, device=y.get_device())[y]
+		else:
+			kk = torch.eye(output_size, dtype=torch.uint8,\
+					requires_grad=False)[y]
+
+		c_t = self.c.masked_select(kk).unsqueeze(1)
 		self.c = self.c - c_t
-		idep_t = self.idep[:, y]
+
+		idep_t = self.idep.masked_select(\
+					kk.view(self.batch_size,1,output_size)).\
+					view(self.batch_size, self.input_size,1)
 		self.idep = self.idep-idep_t
-		edep_t = self.edep[:, y]
-		self.edep = self.edep-edep_t
+
+		for i in range(len(self.edep)):
+			edep_t = self.edep[i].masked_select((self.edep_ind[i].\
+						mm(kk.type_as(self.edep_ind[i]))).type_as(kk)).\
+						view(-1,1)
+			self.edep[i] = self.edep[i]-edep_t
+
 		self.concretize()
+
 		return self.u 
 
 
@@ -223,6 +264,7 @@ class Crown(Interval):
 		self.idep = torch.eye(self.n)*self.e.reshape(-1,1)
 
 		self.edep = torch.zeros((1, self.n))
+
 
 
 

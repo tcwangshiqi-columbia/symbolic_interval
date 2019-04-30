@@ -21,6 +21,7 @@ import torch.nn.functional as F
 from torch.autograd import Variable
 
 from .interval import Interval, Symbolic_interval
+import time
 
 
 class Interval_network(nn.Module):
@@ -67,14 +68,12 @@ class Interval_Dense(nn.Module):
 			edep = ix.edep
 			#print (ix.c.shape, self.layer.weight.shape)
 			ix.c = F.linear(c, self.layer.weight, bias=self.layer.bias)
-
 			ix.idep = F.linear(idep, self.layer.weight)
-			ix.edep = F.linear(edep, self.layer.weight)
+			for i in range(len(edep)):
+				ix.edep[i] = F.linear(edep[i], self.layer.weight)
 			ix.shape = list(ix.c.shape[1:])
-			ix.n = list(ix.c[0].reshape(-1).size())[0]
-
+			ix.n = list(ix.c[0].view(-1).size())[0]
 			ix.concretize()
-
 			return ix
 
 		if(isinstance(ix, Interval)):
@@ -108,14 +107,14 @@ class Interval_Conv2d(nn.Module):
 			ix.idep = F.conv2d(idep, self.layer.weight, 
 						   stride=self.layer.stride,
 						   padding=self.layer.padding)
-			ix.edep = F.conv2d(edep, self.layer.weight, 
+
+			for i in range(len(edep)):
+				ix.edep[i] = F.conv2d(edep[i], self.layer.weight, 
 						   stride=self.layer.stride,
 						   padding=self.layer.padding)
 			ix.shape = list(ix.c.shape[1:])
 			ix.n = list(ix.c[0].reshape(-1).size())[0]
-
 			ix.concretize()
-
 			return ix
 
 		if(isinstance(ix, Interval)):
@@ -142,59 +141,38 @@ class Interval_ReLU(nn.Module):
 		if(isinstance(ix, Symbolic_interval)):
 			lower = ix.l
 			upper = ix.u
+
+			appr_condition = ((lower<0)*(upper>0)).detach()
+			mask = (lower>0).type_as(lower)
+			mask[appr_condition] = upper[appr_condition]/\
+					(upper[appr_condition]-lower[appr_condition]).detach()
+
+			m = int(appr_condition.sum().item())
+			appr_ind = appr_condition.view(-1,ix.n).nonzero()
+
+			appr_err = mask*(-lower)/2.0
+			
 			if(ix.use_cuda):
-				appr_condition = ((lower<0) * (upper>0)).type(\
-					torch.Tensor).cuda(device=ix.c.get_device())
+				error_row = torch.zeros((m, ix.n), device=lower.get_device())
 			else:
-				appr_condition = ((lower<0) * (upper>0)).type(\
-							torch.Tensor)
-			#appr_condition = appr_condition.detach()
-			
-			frac = upper-lower
-			one = upper.new_ones(upper.shape)
-			if(ix.use_cuda):
-				one = one.cuda(device=ix.c.get_device())
-			frac = frac*appr_condition+one*(1-appr_condition)
-			
-			#mask = appr_condition*((upper)/(upper-lower+0.000001))
-			mask = appr_condition*((upper)/frac)
-			mask = mask + 1 - appr_condition
-			#mask = mask.detach()
-			
-			if(ix.use_cuda):
-				mask = mask*((upper>0).type(torch.Tensor).\
-							cuda(device=ix.c.get_device()))
-			else:
-				mask = mask*(upper>0).type(torch.Tensor)
-			#mask = mask.detach()
-			
-			m = int(appr_condition.sum())
-			ix.mask.append(mask[0])
-
-			appr = (appr_condition*mask)[0]
-
-			appr_ind = (appr_condition[0]).nonzero()
-
-			appr_err = (appr*(-lower[0]))/2.0
-
-			if(ix.use_cuda):
 				error_row = torch.zeros((m, ix.n))
-				error_row = error_row.\
-					cuda(device=ix.c.get_device())
-				if(m!=0):
-					error_row = error_row.scatter_(1,\
-						appr_ind, appr_err[appr_ind])
-			else:
 				
-				error_row = torch.zeros((m, ix.n))
-				if(m!=0):
-					error_row = error_row.scatter_(1,\
-						appr_ind, appr_err[appr_ind])
+			error_row = error_row.scatter_(1,\
+					appr_ind[:,1,None], appr_err[appr_condition][:,None])
 
-			ix.c = ix.c*mask+appr_err.reshape(-1)
-			ix.edep = ix.edep*mask
-			ix.idep = ix.idep*mask
-			ix.edep = torch.cat((ix.edep, error_row), 0)
+			edep_ind = lower.new(appr_ind.size(0),lower.size(0)).zero_()
+			edep_ind = edep_ind.scatter_(1, appr_ind[:,0][:,None], 1)
+
+			ix.c = ix.c*mask+appr_err*appr_condition.type_as(lower)
+
+			for i in range(len(ix.edep)):
+				ix.edep[i] *= ix.edep_ind[i].mm(mask)
+
+			ix.idep = ix.idep*mask.view(ix.batch_size, 1, ix.n)
+
+			ix.edep += [error_row]
+
+			ix.edep_ind += [edep_ind]
 
 			return ix
 
@@ -283,10 +261,10 @@ Return:
 	iloss: robust loss provided by symbolic interval analysis
 	ierr: verifiable robust error provided by symbolic interval analysis
 '''
-def sym_interval_analyze(model, epsilon, X, y, use_cuda=True):
+def sym_interval_analyze(net, epsilon, X, y, use_cuda=True):
 
 	# Transfer original model to interval models
-	inet = Interval_network(model)
+	inet = Interval_network(net)
 
 	iloss = 0
 	ierr = 0
@@ -294,14 +272,28 @@ def sym_interval_analyze(model, epsilon, X, y, use_cuda=True):
 
 	minimum = X.min()
 	maximum = X.max()
+	
+	ix = Symbolic_interval(\
+			   torch.clamp(X-epsilon, minimum, maximum),\
+			   torch.clamp(X+epsilon, minimum, maximum),\
+			   use_cuda\
+			 )
+	#ix = Symbolic_interval(X-epsilon, X+epsilon)
+	ix = inet(ix)
+	wc = ix.worst_case(y, net[-1].out_features)
 
+	iloss = nn.CrossEntropyLoss()(wc, y)
+	ierr = (wc.max(1)[1] != y)
+	ierr = ierr.sum().item()/X.size(0)
+	'''
 	for xi, yi in zip(X,y):
-
+		
 		ix = Symbolic_interval(\
 			   torch.clamp(xi.unsqueeze(0)-epsilon, minimum, maximum),\
 			   torch.clamp(xi.unsqueeze(0)+epsilon, minimum, maximum),\
 			   use_cuda\
-		     )
+			 )
+		
 		#ix = Symbolic_interval(xi.unsqueeze(0)-epsilon,\
 			#xi.unsqueeze(0)+epsilon)
 
@@ -329,7 +321,7 @@ def sym_interval_analyze(model, epsilon, X, y, use_cuda=True):
 	else:
 		#iloss = iloss.data.numpy()
 		ierr = ierr.data.numpy()[0]
-
+	'''
 	return iloss, ierr
 
 

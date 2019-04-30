@@ -50,6 +50,23 @@ def mnist_model():
 	)
 	return model
 
+torch.manual_seed(7)
+
+def toy_model():
+	model = nn.Sequential(
+		Flatten(),
+		nn.Linear(784,2000),
+		nn.ReLU(),
+		nn.Linear(2000,3000),
+		nn.ReLU(),
+		nn.Linear(3000,200),
+		nn.ReLU(),
+		nn.Linear(200,20),
+		nn.ReLU(),
+		nn.Linear(20,10),
+		)
+	return model
+
 def mnist_loaders(batch_size, shuffle_test=False): 
 	mnist_train = datasets.MNIST("./data", train=True, download=True,\
 				transform=transforms.ToTensor())
@@ -84,9 +101,10 @@ if __name__ == '__main__':
 	else:
 		model = torch.load(MODEL_NAME)[0]
 
+	#model = toy_model()
 	#method = NAIVE_INTERVAL
 	epsilon = 0.1
-	batch_size = 10
+	batch_size = 20
 
 	train_loader, test_loader = mnist_loaders(batch_size)	
 	
@@ -99,14 +117,16 @@ if __name__ == '__main__':
 
 		#if(method == ERIC_DUAL):
 		start = time.time()
+		#eric_bound, eric_loss, eric_err = robust_loss(model,\
+						#epsilon, X, y, bounded_input={0, 1})
 		eric_bound, eric_loss, eric_err = robust_loss(model,\
-									epsilon, X, y)
+								epsilon, X, y)
 
 		print ("eric avg width per label",\
 					eric_bound.sum()/X.shape[0]/10)
 		print ("eric loss", eric_loss)
 		print ("eric err:", eric_err)
-		print ("eric time per sample:", (time.time()-start)/X.shape[0])
+		print ("eric time per sample:", (time.time()-start))
 		print()
 		
 		#if(method == BASELINE):
@@ -119,7 +139,7 @@ if __name__ == '__main__':
 		print("baseline time per sample:",\
 					(time.time()-start)/X.shape[0])
 		print() 
-
+		
 		#if(method == NAIVE_INTERVAL):
 		start = time.time()
 
@@ -131,7 +151,7 @@ if __name__ == '__main__':
 		print ("naive time per sample:",\
 					(time.time()-start)/X.shape[0])
 		print()
-
+		
 		#if(method == SYM_INTERVAL):
 			
 		start = time.time()
@@ -143,7 +163,7 @@ if __name__ == '__main__':
 		print ("sym loss:", iloss)
 		print ("sym err:", ierr)
 		print("sym time per sample:",\
-					(time.time()-start)/X.shape[0])
+					(time.time()-start))
 
 		exit()
 

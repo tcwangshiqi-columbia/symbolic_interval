@@ -63,6 +63,7 @@ class DualLinear(DualLayer):
                 b = network(self.bias[0])
             if b is None:
                 return 0,0
+            #print("linear bounds", b, b)
             return b,b
 
     def objective(self, *nus): 
@@ -176,22 +177,26 @@ class DualReshape(DualLayer):
 class DualReLU(DualLayer): 
     def __init__(self, zl, zu): 
         super(DualReLU, self).__init__()
-
-
+        
+        # d is the mask
         d = (zl >= 0).detach().type_as(zl)
+        # I is appr condition
         I = ((zu > 0).detach() * (zl < 0).detach())
+
         if I.sum().item() > 0:
             d[I] += zu[I]/(zu[I] - zl[I])
-
+        
+        # n is the number of relus in that layer
         n = d[0].numel()
-        if I.sum().item() > 0: 
+
+        if I.sum().item() > 0:
+
             self.I_empty = False
             self.I_ind = I.view(-1,n).nonzero()
-
-
             self.nus = [zl.new(I.sum().item(), n).zero_()]
             self.nus[-1].scatter_(1, self.I_ind[:,1,None], d[I][:,None])
             self.nus[-1] = self.nus[-1].view(-1, *(d.size()[1:]))
+
             self.I_collapse = zl.new(self.I_ind.size(0),zl.size(0)).zero_()
             self.I_collapse.scatter_(1, self.I_ind[:,0][:,None], 1)
         else: 
@@ -201,6 +206,7 @@ class DualReLU(DualLayer):
         self.I = I
         self.zl = zl
         self.zu = zu
+
 
     def apply(self, dual_layer): 
         if self.I_empty: 
@@ -224,9 +230,11 @@ class DualReLU(DualLayer):
         zlI = self.zl[self.I]
         zl = (zlI * (-nu.t()).clamp(min=0)).mm(self.I_collapse).t().contiguous()
         zu = -(zlI * nu.t().clamp(min=0)).mm(self.I_collapse).t().contiguous()
-
+        #print(self.I_collapse)
         zl = zl.view(-1, *(size[1:]))
         zu = zu.view(-1, *(size[1:]))
+        #print("relu bounds", zu)
+
         return zl,zu
 
     def objective(self, *nus): 
