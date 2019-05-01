@@ -52,6 +52,9 @@ def mnist_model():
 
 torch.manual_seed(7)
 
+'''Test toy fully connected mnist models.
+Please use nn.Sequential to build the models.
+'''
 def toy_model():
 	model = nn.Sequential(
 		Flatten(),
@@ -79,9 +82,6 @@ def mnist_loaders(batch_size, shuffle_test=False):
 				pin_memory=True)
 	return train_loader, test_loader
 
-NAIVE_INTERVAL = 0
-SYM_INTERVAL = 1
-CROWN = 2
 
 
 '''main function of this test script.
@@ -102,9 +102,12 @@ if __name__ == '__main__':
 		model = torch.load(MODEL_NAME)[0]
 
 	#model = toy_model()
-	#method = NAIVE_INTERVAL
 	epsilon = 0.1
-	batch_size = 20
+	batch_size = 10
+	PARALLEL = False
+
+	if(not use_cuda):
+		PARALLEL = False
 
 	train_loader, test_loader = mnist_loaders(batch_size)	
 	
@@ -115,31 +118,39 @@ if __name__ == '__main__':
 			y = y.cuda().long()
 			model.cuda()
 
+		if(PARALLEL):
+			# The first run with parallel will take a few seconds
+			# to warm up.
+			eric_loss, eric_err = robust_loss(model,\
+						 epsilon, X, y, parallel=PARALLEL)
+			del eric_loss, eric_err
+
 		#if(method == ERIC_DUAL):
 		start = time.time()
-		#eric_bound, eric_loss, eric_err = robust_loss(model,\
-						#epsilon, X, y, bounded_input={0, 1})
-		eric_bound, eric_loss, eric_err = robust_loss(model,\
-								epsilon, X, y)
+		#eric_loss, eric_err = robust_loss(model,\
+				#epsilon, X, y,parallel=True, bounded_input={0, 1})
+		eric_loss, eric_err = robust_loss(model,\
+					epsilon, X, y, parallel=PARALLEL)
 
-		print ("eric avg width per label",\
-					eric_bound.sum()/X.shape[0]/10)
 		print ("eric loss", eric_loss)
 		print ("eric err:", eric_err)
 		print ("eric time per sample:", (time.time()-start))
+		del eric_loss, eric_err
 		print()
+
 		
+
 		#if(method == BASELINE):
 		start = time.time()
 
 		f = model(X)
-		#print("concrete propagation:", model(X))
 		loss = nn.CrossEntropyLoss()(f, y)
 		print("baseline loss:", loss)
 		print("baseline time per sample:",\
 					(time.time()-start)/X.shape[0])
 		print() 
 		
+
 		#if(method == NAIVE_INTERVAL):
 		start = time.time()
 
@@ -150,20 +161,22 @@ if __name__ == '__main__':
 		print ("naive err:", ierr)
 		print ("naive time per sample:",\
 					(time.time()-start)/X.shape[0])
+		del iloss, ierr
 		print()
 		
-		#if(method == SYM_INTERVAL):
-			
+
+		#if(method == SYM_INTERVAL):	
 		start = time.time()
 
-		inet = Interval_network(model)
 		iloss, ierr = sym_interval_analyze(model, epsilon,\
-					X, y, use_cuda)
+						X, y, use_cuda, parallel=PARALLEL)
+			
 
 		print ("sym loss:", iloss)
 		print ("sym err:", ierr)
 		print("sym time per sample:",\
 					(time.time()-start))
+		del iloss, ierr
 
 		exit()
 

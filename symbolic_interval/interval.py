@@ -96,7 +96,7 @@ class Interval():
 		return string
 	
 
-	def worst_case(self, y):
+	def worst_case(self, y, output_size):
 		'''Calculate the wrost case of the analyzed output ranges.
 		In details, it returns the upper bound of other label minus 
 		the lower bound of the target label. If the returned value is 

@@ -109,7 +109,7 @@ def robust_loss(net, epsilon, X, y,
     if size_average: 
         err = err.sum().item()/X.size(0)
     ce_loss = nn.CrossEntropyLoss(reduce=size_average)(f, y)
-    return f, ce_loss, err
+    return ce_loss, err
 
 class InputSequential(nn.Sequential): 
     def __init__(self, *args, **kwargs): 

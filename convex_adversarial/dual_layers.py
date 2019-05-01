@@ -177,7 +177,9 @@ class DualReshape(DualLayer):
 class DualReLU(DualLayer): 
     def __init__(self, zl, zu): 
         super(DualReLU, self).__init__()
-        
+
+        #print(zl.shape)
+
         # d is the mask
         d = (zl >= 0).detach().type_as(zl)
         # I is appr condition
@@ -228,6 +230,7 @@ class DualReLU(DualLayer):
         size = nu.size()
         nu = nu.view(nu.size(0), -1)
         zlI = self.zl[self.I]
+        #print("nu", nu)
         zl = (zlI * (-nu.t()).clamp(min=0)).mm(self.I_collapse).t().contiguous()
         zu = -(zlI * nu.t().clamp(min=0)).mm(self.I_collapse).t().contiguous()
         #print(self.I_collapse)

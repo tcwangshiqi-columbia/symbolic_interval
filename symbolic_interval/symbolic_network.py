@@ -51,7 +51,6 @@ class Interval_network(nn.Module):
 	def forward(self, ix):
 		for i, layer in enumerate(self.net):
 			ix = layer(ix)
-
 		return ix
 
 
@@ -79,11 +78,10 @@ class Interval_Dense(nn.Module):
 		if(isinstance(ix, Interval)):
 			c = ix.c
 			e = ix.e
-			#print (ix.c.shape, self.layer.weight.shape)
 			c = F.linear(c, self.layer.weight, bias=self.layer.bias)
 			e = F.linear(e, self.layer.weight.abs())
-			#return F.linear(x, self.layer.weight, bias=self.layer.bias)
 			ix.update_lu(c-e, c+e)
+			
 			return ix
 
 
@@ -128,6 +126,7 @@ class Interval_Conv2d(nn.Module):
 						   stride=self.layer.stride,
 						   padding=self.layer.padding)
 			ix.update_lu(c-e, c+e)
+			
 			return ix
 
 
@@ -156,7 +155,7 @@ class Interval_ReLU(nn.Module):
 				error_row = torch.zeros((m, ix.n), device=lower.get_device())
 			else:
 				error_row = torch.zeros((m, ix.n))
-				
+
 			error_row = error_row.scatter_(1,\
 					appr_ind[:,1,None], appr_err[appr_condition][:,None])
 
@@ -173,7 +172,6 @@ class Interval_ReLU(nn.Module):
 			ix.edep += [error_row]
 
 			ix.edep_ind += [edep_ind]
-
 			return ix
 
 		if(isinstance(ix, Interval)):
@@ -213,6 +211,49 @@ class Interval_Flatten(nn.Module):
 			return ix
 
 
+class Interval_Bound(nn.Module):
+	def __init__(self, net, epsilon, method="sym", use_cuda=True):
+		nn.Module.__init__(self)
+		self.net = net
+		self.epsilon = epsilon
+		self.use_cuda = use_cuda
+
+		assert method in ["sym", "naive"],\
+				"No such interval methods!"
+		self.method = method
+			
+
+	def forward(self, X, y):
+		minimum = X.min()
+		maximum = X.max()
+		out_features = self.net[-1].out_features
+
+		# Transfer original model to interval models
+		inet = Interval_network(self.net)
+
+		# Create symbolic inteval classes from X
+		if(self.method == "naive"):
+			ix = Interval(torch.clamp(X-self.epsilon, minimum, maximum),\
+					torch.clamp(X+self.epsilon, minimum, maximum),\
+					self.use_cuda\
+			 	)
+
+		if(self.method == "sym"):
+			ix = Symbolic_interval(\
+				   torch.clamp(X-self.epsilon, minimum, maximum),\
+				   torch.clamp(X+self.epsilon, minimum, maximum),\
+				   self.use_cuda\
+				 )
+
+		# Propagate symbolic interval through interval networks
+		ix = inet(ix)
+
+		# Calculate the worst case outputs
+		wc = ix.worst_case(y, out_features)
+
+		return wc
+
+
 '''Naive interval propagations.
 
 Args:
@@ -224,28 +265,21 @@ Return:
 	iloss: robust loss provided by naive interval analysis
 	ierr: verifiable robust error provided by naive interval analysis
 '''
-def naive_interval_analyze(model, epsilon, X, y, use_cuda=True):
+def naive_interval_analyze(net, epsilon, X, y,\
+					use_cuda=True, parallel=False):
 
 	# Transfer original model to interval models
-	inet = Interval_network(model)
-	minimum = X.min()
-	maximum = X.max()
 
-	ix = Interval(torch.clamp(X-epsilon, minimum, maximum),\
-					torch.clamp(X+epsilon, minimum, maximum),\
-					use_cuda\
-				)
-
-	ix = (inet(ix))
-	wc =  ix.worst_case(y)
-	#print (wc)
-	#print (ix.mask)
+	if(parallel):
+		wc = nn.DataParallel(Interval_Bound(net, epsilon,
+				method="naive", use_cuda=use_cuda))(X, y)
+	else:
+		wc = Interval_Bound(net, epsilon, method="naive",\
+						use_cuda=use_cuda)(X, y)
 
 	iloss = nn.CrossEntropyLoss()(wc, y)
 	ierr = (wc.max(1)[1]!=y).type(torch.Tensor)
 	ierr = ierr.sum().item()/X.shape[0]
-
-	print ("naive avg width per label:", wc.sum()/X.shape[0]/10)
 
 	return iloss, ierr
 
@@ -256,72 +290,28 @@ Args:
 	model: regular nn.Sequential models
 	epsilon: desired input ranges
 	X and y: samples and lables
+	use_cuda: whether we want to use cuda
+	parallel: whehter we want to run on multiple gpus
 
 Return:
 	iloss: robust loss provided by symbolic interval analysis
-	ierr: verifiable robust error provided by symbolic interval analysis
+	ierr: verifiable robust error provided by symbolic
+	interval analysis
 '''
-def sym_interval_analyze(net, epsilon, X, y, use_cuda=True):
+def sym_interval_analyze(net, epsilon, X, y,\
+					use_cuda=True, parallel=False):
 
-	# Transfer original model to interval models
-	inet = Interval_network(net)
-
-	iloss = 0
-	ierr = 0
-	width_per_label = 0
-
-	minimum = X.min()
-	maximum = X.max()
-	
-	ix = Symbolic_interval(\
-			   torch.clamp(X-epsilon, minimum, maximum),\
-			   torch.clamp(X+epsilon, minimum, maximum),\
-			   use_cuda\
-			 )
-	#ix = Symbolic_interval(X-epsilon, X+epsilon)
-	ix = inet(ix)
-	wc = ix.worst_case(y, net[-1].out_features)
+	if(parallel):
+		wc = nn.DataParallel(Interval_Bound(net, epsilon,\
+					method="sym", use_cuda=use_cuda))(X, y)
+	else:
+		wc = Interval_Bound(net, epsilon,\
+					method="sym", use_cuda=use_cuda)(X, y)
 
 	iloss = nn.CrossEntropyLoss()(wc, y)
 	ierr = (wc.max(1)[1] != y)
 	ierr = ierr.sum().item()/X.size(0)
-	'''
-	for xi, yi in zip(X,y):
-		
-		ix = Symbolic_interval(\
-			   torch.clamp(xi.unsqueeze(0)-epsilon, minimum, maximum),\
-			   torch.clamp(xi.unsqueeze(0)+epsilon, minimum, maximum),\
-			   use_cuda\
-			 )
-		
-		#ix = Symbolic_interval(xi.unsqueeze(0)-epsilon,\
-			#xi.unsqueeze(0)+epsilon)
-
-		ix = inet(ix)
-
-		# wc is the worst case output returned by symbolic 
-		# interval analysis
-		wc = (ix.worst_case(yi.unsqueeze(0)))
-
-		width_per_label += wc.sum()
-
-		# You can get the mask for each layer in ix.mask
-		#print (ix.mask)
-
-		iloss += nn.CrossEntropyLoss()(wc, yi.unsqueeze(0))
-		ierr += (wc.max(1)[1]!=yi).type(torch.Tensor)
-
-	iloss /= X.shape[0]
-	ierr /= X.shape[0]
-
-	print ("sym avg width per label:", width_per_label/X.shape[0]/10)
-	if(use_cuda): 
-		#iloss = iloss.cpu().data.numpy()
-		ierr = ierr.cpu().data.numpy()[0]
-	else:
-		#iloss = iloss.data.numpy()
-		ierr = ierr.data.numpy()[0]
-	'''
+	
 	return iloss, ierr
 
 
