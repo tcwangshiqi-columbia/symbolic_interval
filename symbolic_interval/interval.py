@@ -185,7 +185,7 @@ class Symbolic_interval(Interval):
 					self.input_size, 1)).abs().sum(dim=1)
 
 			for i in range(len(self.edep)):
-				e += self.edep_ind[i].t().mm(self.edep[i].abs())
+				e = e + self.edep_ind[i].t().mm(self.edep[i].abs())
 
 		else:
 			e = (self.idep*self.e.view(self.batch_size,\

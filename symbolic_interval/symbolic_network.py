@@ -165,13 +165,13 @@ class Interval_ReLU(nn.Module):
 			ix.c = ix.c*mask+appr_err*appr_condition.type_as(lower)
 
 			for i in range(len(ix.edep)):
-				ix.edep[i] *= ix.edep_ind[i].mm(mask)
+				ix.edep[i] = ix.edep[i] * ix.edep_ind[i].mm(mask)
 
 			ix.idep = ix.idep*mask.view(ix.batch_size, 1, ix.n)
 
-			ix.edep += [error_row]
+			ix.edep = ix.edep + [error_row]
 
-			ix.edep_ind += [edep_ind]
+			ix.edep_ind = ix.edep_ind + [edep_ind]
 			return ix
 
 		if(isinstance(ix, Interval)):
