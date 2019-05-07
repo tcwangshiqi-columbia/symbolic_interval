@@ -7,6 +7,7 @@ from __future__ import print_function
 
 import numpy as np
 import torch
+import warnings
 
 
 class Interval():
@@ -252,6 +253,154 @@ class Symbolic_interval(Interval):
 		self.concretize()
 
 		return self.u 
+
+
+
+class Symbolic_interval_proj(Interval):
+	'''
+	* :attr:`shape` is the input shape of ReLU layers.
+
+	* :attr:`n` is the number of hidden nodes in each layer.
+
+	* :attr:`idep` keeps the input dependencies.
+
+	* :attr:`edep` keeps the error dependency introduced by each
+	  overestimated nodes.
+	'''
+	def __init__(self, lower, upper, proj=None, use_cuda=False):
+		assert lower.shape[0]==upper.shape[0], "each symbolic"+\
+					"should have the same shape"
+		
+		Interval.__init__(self, lower, upper)
+		self.use_cuda = use_cuda
+		self.shape = list(self.c.shape[1:])
+		self.n = list(self.c[0].reshape(-1).size())[0]
+		self.input_size = self.n
+		self.batch_size = self.c.shape[0]
+		if(self.use_cuda):
+			self.idep = torch.eye(self.n, device=\
+					self.c.get_device())
+		else:
+			self.idep = torch.eye(self.n)
+
+		self.edep = []
+		self.edep_ind = []
+
+		if(proj>self.input_size):
+			warnings.warn("proj is larger than input size")
+			self.proj = self.input_size
+		else:
+			self.proj = proj
+		'''
+		proj_ind = np.arange(self.input_size)
+		np.random.shuffle(proj_ind)
+		proj_matrix = np.eye(self.input_size)[proj_ind]
+		proj_list = np.array_split(proj_matrix, self.proj)
+		for pi in range(len(proj_list)):
+			proj_list[pi] = np.sum(proj_list[pi], axis=0)
+		proj_matrix = self.c.new_tensor(proj_list).unsqueeze(0)
+
+		self.idep = proj_matrix*self.e.view(self.batch_size, 1, self.input_size)
+		print(self.idep.shape)
+		'''
+		idep_ind = np.arange(self.proj)
+		proj_ind = np.arange(self.proj+1, self.input_size)
+
+		self.idep_proj = self.idep[proj_ind].sum(dim=0).unsqueeze(0)
+		self.idep = self.idep[idep_ind].unsqueeze(0)
+		
+		self.idep_proj = self.idep_proj*self.e.\
+				view(self.batch_size, self.input_size)
+		#print(self.idep_proj.shape)
+
+		self.e = self.e.view(self.batch_size, self.input_size)[:, idep_ind]
+		#print(self.e.shape)
+
+	'''Calculating the upper and lower matrix for symbolic intervals.
+	To make concretize easier, convolutional layer nodes will be 
+	extended first.
+	'''
+	def concretize(self):
+		self.extend()
+
+		# first only assume only one relu layer
+		e = (self.idep*self.e.view(self.batch_size,\
+				self.proj, 1)).abs().sum(dim=1)
+		#print(self.idep_proj.shape)
+		e = e + self.idep_proj.abs()
+
+		if(self.edep):
+			for i in range(len(self.edep)):
+				e = e + self.edep_ind[i].t().mm(self.edep[i].abs())
+
+		self.l = self.c - e
+		self.u = self.c + e
+
+		return self
+
+
+	'''Extending convolutional layer nodes to a two-dimensional vector.
+	'''
+	def extend(self):
+		self.c = self.c.reshape(self.batch_size, self.n)
+		self.idep = self.idep.reshape(-1, self.proj, self.n)
+		self.idep_proj = self.idep_proj.reshape(-1, self.n)
+
+		for i in range(len(self.edep)):
+			self.edep[i] = self.edep[i].reshape(-1, self.n)
+
+
+	'''Convert the extended layer back to the shape stored in `shape`.
+	'''
+	def shrink(self):
+		self.c = self.c.reshape(tuple([-1]+self.shape))
+		self.idep = self.idep.reshape(tuple([-1]+self.shape))
+		self.idep_proj = self.idep_proj.view(tuple([self.batch_size]+self.shape))
+
+		for i in range(len(self.edep)):
+			self.edep[i] = self.edep[i].reshape(\
+				tuple([-1]+self.shape))
+
+
+	'''Calculate the wrost case of the analyzed output ranges.
+	Return the upper bound of other output dependency minus target's
+	output dependency. If the returned value is less than 0, it means
+	the worst case provided by interval analysis will never be larger
+	than the target label y's. 
+	'''
+	def worst_case(self, y, output_size):
+
+		assert y.shape[0] == self.l.shape[0] == self.batch_size,\
+								"wrong label shape"
+		if(self.use_cuda):
+			kk = torch.eye(output_size, dtype=torch.uint8,\
+				requires_grad=False, device=y.get_device())[y]
+		else:
+			kk = torch.eye(output_size, dtype=torch.uint8,\
+					requires_grad=False)[y]
+
+		c_t = self.c.masked_select(kk).unsqueeze(1)
+		self.c = self.c - c_t
+
+		idep_t = self.idep.masked_select(\
+					kk.view(self.batch_size,1,output_size)).\
+					view(self.batch_size, self.proj,1)
+		self.idep = self.idep-idep_t
+
+		idep_proj_t = self.idep_proj.masked_select(kk)
+		self.idep_proj = self.idep_proj+idep_proj_t.view(-1,1)
+		self.idep_proj = self.idep_proj*(1-kk).type_as(self.idep_proj)
+
+		for i in range(len(self.edep)):
+			edep_t = self.edep[i].masked_select((self.edep_ind[i].\
+						mm(kk.type_as(self.edep_ind[i]))).type_as(kk)).\
+						view(-1,1)
+			self.edep[i] = self.edep[i]-edep_t
+
+		self.concretize()
+
+		return self.u 
+
 
 
 

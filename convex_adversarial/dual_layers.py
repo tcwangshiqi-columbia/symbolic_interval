@@ -178,7 +178,8 @@ class DualReLU(DualLayer):
     def __init__(self, zl, zu): 
         super(DualReLU, self).__init__()
 
-        #print(zl.shape)
+        #print("zu:",zu)
+        #print("zl:",zl)
 
         # d is the mask
         d = (zl >= 0).detach().type_as(zl)

@@ -139,6 +139,7 @@ class InfBallProjBounded(InfBallProj):
 
         n = X[0].numel()
         R = X.new(1,k,*X.size()[1:]).cauchy_()
+        print(k, R.shape)
         self.nu_l = [R * self.nu_one_l[-1].unsqueeze(1)]
         self.nu_u = [R * self.nu_one_u[-1].unsqueeze(1)]
 

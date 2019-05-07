@@ -58,15 +58,11 @@ Please use nn.Sequential to build the models.
 def toy_model():
 	model = nn.Sequential(
 		Flatten(),
-		nn.Linear(784,2000),
+		nn.Linear(784,5),
 		nn.ReLU(),
-		nn.Linear(2000,3000),
+		nn.Linear(5,3),
 		nn.ReLU(),
-		nn.Linear(3000,200),
-		nn.ReLU(),
-		nn.Linear(200,20),
-		nn.ReLU(),
-		nn.Linear(20,10),
+		nn.Linear(3,10),
 		)
 	return model
 
@@ -127,10 +123,12 @@ if __name__ == '__main__':
 
 		#if(method == ERIC_DUAL):
 		start = time.time()
-		#eric_loss, eric_err = robust_loss(model,\
-				#epsilon, X, y,parallel=True, bounded_input={0, 1})
 		eric_loss, eric_err = robust_loss(model,\
-					epsilon, X, y, parallel=PARALLEL)
+				epsilon, X, y,parallel=True,\
+				bounded_input={0, 1})
+				#norm_type="l1_median", proj=20)
+		#eric_loss, eric_err = robust_loss(model,\
+					#epsilon, X, y, parallel=PARALLEL)
 
 		print ("eric loss", eric_loss)
 		print ("eric err:", eric_err)
@@ -138,7 +136,6 @@ if __name__ == '__main__':
 		del eric_loss, eric_err
 		print()
 
-		
 
 		#if(method == BASELINE):
 		start = time.time()
