@@ -85,7 +85,7 @@ class Interval():
 		self.c = center
 		self.e = error
 		self.u = self.c+self.e
-		self.l = self.c+self.e
+		self.l = self.c-self.e
 
 
 	def __str__(self):
@@ -184,13 +184,15 @@ class Symbolic_interval(Interval):
 			# first only assume only one relu layer
 			e = (self.idep*self.e.view(self.batch_size,\
 					self.input_size, 1)).abs().sum(dim=1)
-
+			#print("sym e1", e)
 			for i in range(len(self.edep)):
 				e = e + self.edep_ind[i].t().mm(self.edep[i].abs())
+			#print("sym e2", e)
 
 		else:
 			e = (self.idep*self.e.view(self.batch_size,\
 					self.input_size, 1)).abs().sum(dim=1)
+			#print("sym e1", e)
 
 		self.l = self.c - e
 		self.u = self.c + e
@@ -304,14 +306,14 @@ class Symbolic_interval_proj(Interval):
 		print(self.idep.shape)
 		'''
 		idep_ind = np.arange(self.proj)
-		proj_ind = np.arange(self.proj+1, self.input_size)
+		proj_ind = np.arange(self.proj, self.input_size)
 
 		self.idep_proj = self.idep[proj_ind].sum(dim=0).unsqueeze(0)
 		self.idep = self.idep[idep_ind].unsqueeze(0)
 		
 		self.idep_proj = self.idep_proj*self.e.\
 				view(self.batch_size, self.input_size)
-		#print(self.idep_proj.shape)
+		#print(self.idep_proj)
 
 		self.e = self.e.view(self.batch_size, self.input_size)[:, idep_ind]
 		#print(self.e.shape)
@@ -326,12 +328,13 @@ class Symbolic_interval_proj(Interval):
 		# first only assume only one relu layer
 		e = (self.idep*self.e.view(self.batch_size,\
 				self.proj, 1)).abs().sum(dim=1)
-		#print(self.idep_proj.shape)
+		#print("e1", e)
 		e = e + self.idep_proj.abs()
-
+		#print("e2", e)
 		if(self.edep):
 			for i in range(len(self.edep)):
 				e = e + self.edep_ind[i].t().mm(self.edep[i].abs())
+		#print("e3", e)
 
 		self.l = self.c - e
 		self.u = self.c + e

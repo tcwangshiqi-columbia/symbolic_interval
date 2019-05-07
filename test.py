@@ -97,7 +97,7 @@ if __name__ == '__main__':
 	else:
 		model = torch.load(MODEL_NAME)[0]
 
-	#model = toy_model()
+	model = toy_model()
 	epsilon = 0.1
 	batch_size = 10
 	PARALLEL = False
@@ -167,6 +167,20 @@ if __name__ == '__main__':
 
 		iloss, ierr = sym_interval_analyze(model, epsilon,\
 						X, y, use_cuda, parallel=PARALLEL)
+			
+
+		print ("sym loss:", iloss)
+		print ("sym err:", ierr)
+		print("sym time per sample:",\
+					(time.time()-start))
+		del iloss, ierr
+		print()
+
+
+		start = time.time()
+
+		iloss, ierr = sym_interval_analyze(model, epsilon,\
+						X, y, use_cuda, parallel=PARALLEL, proj=100)
 			
 
 		print ("sym loss:", iloss)

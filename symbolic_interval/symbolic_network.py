@@ -100,6 +100,8 @@ class Interval_Dense(nn.Module):
 			e = ix.e
 			c = F.linear(c, self.layer.weight, bias=self.layer.bias)
 			e = F.linear(e, self.layer.weight.abs())
+			#print("naive e", e)
+			#print("naive c", c)
 			ix.update_lu(c-e, c+e)
 			
 			return ix
@@ -137,7 +139,7 @@ class Interval_Conv2d(nn.Module):
 			return ix
 
 		if(isinstance(ix, Symbolic_interval_proj)):
-			print(ix.idep.shape)
+			#print(ix.idep.shape)
 			ix.shrink()
 			c = ix.c
 			idep = ix.idep
@@ -184,6 +186,8 @@ class Interval_ReLU(nn.Module):
 		self.layer = layer
 
 	def forward(self, ix):
+		#print(ix.u)
+		#print(ix.l)
 		if(isinstance(ix, Symbolic_interval)):
 			lower = ix.l
 			upper = ix.u
@@ -196,20 +200,23 @@ class Interval_ReLU(nn.Module):
 					(upper[appr_condition]-lower[appr_condition]).detach()
 
 			m = int(appr_condition.sum().item())
+
 			appr_ind = appr_condition.view(-1,ix.n).nonzero()
 
 			appr_err = mask*(-lower)/2.0
-			
-			if(ix.use_cuda):
-				error_row = torch.zeros((m, ix.n), device=lower.get_device())
-			else:
-				error_row = torch.zeros((m, ix.n))
 
-			error_row = error_row.scatter_(1,\
+			if (m!=0):
+
+				if(ix.use_cuda):
+					error_row = torch.zeros((m, ix.n), device=lower.get_device())
+				else:
+					error_row = torch.zeros((m, ix.n))
+
+				error_row = error_row.scatter_(1,\
 					appr_ind[:,1,None], appr_err[appr_condition][:,None])
 
-			edep_ind = lower.new(appr_ind.size(0),lower.size(0)).zero_()
-			edep_ind = edep_ind.scatter_(1, appr_ind[:,0][:,None], 1)
+				edep_ind = lower.new(appr_ind.size(0),lower.size(0)).zero_()
+				edep_ind = edep_ind.scatter_(1, appr_ind[:,0][:,None], 1)
 
 			ix.c = ix.c*mask+appr_err*appr_condition.type_as(lower)
 
@@ -218,9 +225,11 @@ class Interval_ReLU(nn.Module):
 
 			ix.idep = ix.idep*mask.view(ix.batch_size, 1, ix.n)
 
-			ix.edep = ix.edep + [error_row]
+			if(m!=0):
 
-			ix.edep_ind = ix.edep_ind + [edep_ind]
+				ix.edep = ix.edep + [error_row]
+				ix.edep_ind = ix.edep_ind + [edep_ind]
+
 			return ix
 
 		if(isinstance(ix, Symbolic_interval_proj)):
@@ -239,16 +248,18 @@ class Interval_ReLU(nn.Module):
 
 			appr_err = mask*(-lower)/2.0
 			
-			if(ix.use_cuda):
-				error_row = torch.zeros((m, ix.n), device=lower.get_device())
-			else:
-				error_row = torch.zeros((m, ix.n))
+			if (m!=0):
 
-			error_row = error_row.scatter_(1,\
-					appr_ind[:,1,None], appr_err[appr_condition][:,None])
+				if(ix.use_cuda):
+					error_row = torch.zeros((m, ix.n), device=lower.get_device())
+				else:
+					error_row = torch.zeros((m, ix.n))
 
-			edep_ind = lower.new(appr_ind.size(0),lower.size(0)).zero_()
-			edep_ind = edep_ind.scatter_(1, appr_ind[:,0][:,None], 1)
+				error_row = error_row.scatter_(1,\
+						appr_ind[:,1,None], appr_err[appr_condition][:,None])
+
+				edep_ind = lower.new(appr_ind.size(0),lower.size(0)).zero_()
+				edep_ind = edep_ind.scatter_(1, appr_ind[:,0][:,None], 1)
 
 			ix.c = ix.c*mask+appr_err*appr_condition.type_as(lower)
 
@@ -258,9 +269,10 @@ class Interval_ReLU(nn.Module):
 			ix.idep = ix.idep*mask.view(ix.batch_size, 1, ix.n)
 			ix.idep_proj = ix.idep_proj*mask.view(ix.batch_size, ix.n)
 
-			ix.edep = ix.edep + [error_row]
+			if (m!=0):
+				ix.edep = ix.edep + [error_row]
+				ix.edep_ind = ix.edep_ind + [edep_ind]
 
-			ix.edep_ind = ix.edep_ind + [edep_ind]
 			return ix
 
 
@@ -313,6 +325,8 @@ class Interval_Bound(nn.Module):
 		self.epsilon = epsilon
 		self.use_cuda = use_cuda
 		self.proj = proj
+		if(proj is not None):
+			assert proj>0, "project dimension has to be larger than 0"
 
 		assert method in ["sym", "naive"],\
 				"No such interval methods!"
@@ -352,9 +366,11 @@ class Interval_Bound(nn.Module):
 		# Propagate symbolic interval through interval networks
 		ix = inet(ix)
 		#print(ix.u)
+		#print(ix.l)
 
 		# Calculate the worst case outputs
 		wc = ix.worst_case(y, out_features)
+		#print(wc)
 
 		return wc
 
@@ -408,10 +424,10 @@ def sym_interval_analyze(net, epsilon, X, y,\
 
 	if(parallel):
 		wc = nn.DataParallel(Interval_Bound(net, epsilon,\
-					method="sym", proj=780, use_cuda=use_cuda))(X, y)
+					method="sym", proj=proj, use_cuda=use_cuda))(X, y)
 	else:
 		wc = Interval_Bound(net, epsilon,\
-					method="sym", proj=780, use_cuda=use_cuda)(X, y)
+					method="sym", proj=proj, use_cuda=use_cuda)(X, y)
 
 	iloss = nn.CrossEntropyLoss()(wc, y)
 	ierr = (wc.max(1)[1] != y)
