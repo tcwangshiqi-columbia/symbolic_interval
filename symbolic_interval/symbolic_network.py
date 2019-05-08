@@ -426,11 +426,25 @@ class Interval_Bound(nn.Module):
 					 )
 			else:
 				input_size = list(X[0].reshape(-1).size())[0]
+
+				
+				
 				if(self.proj>(input_size/2)):
+
+					X_var = Variable(X, requires_grad=True)
+					loss = nn.CrossEntropyLoss()\
+							(self.net(X_var), y)
+					loss.backward()
+					x_grad = X_var.grad.view(-1, input_size)
+					grad_ind = (x_grad.abs().topk(self.proj, dim=1)[1])
+					# We can set grad_ind as None to save the sort time
+					# As the tradeoff, the tightness will be worse
+					# grad_ind = None
 					ix = Symbolic_interval_proj1(\
 						   torch.clamp(X-self.epsilon, minimum, maximum),\
 						   torch.clamp(X+self.epsilon, minimum, maximum),\
 						   self.proj,\
+						   grad_ind,\
 						   self.use_cuda\
 						 )
 				else:

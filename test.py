@@ -180,7 +180,7 @@ if __name__ == '__main__':
 		start = time.time()
 
 		iloss, ierr = sym_interval_analyze(model, epsilon,\
-						X, y, use_cuda, parallel=PARALLEL, proj=350)
+						X, y, use_cuda, parallel=PARALLEL, proj=500)
 			
 
 		print ("sym loss:", iloss)
