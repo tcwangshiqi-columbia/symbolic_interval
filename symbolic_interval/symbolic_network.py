@@ -418,6 +418,14 @@ class Interval_Bound(nn.Module):
 			 	)
 
 		if(self.method == "sym"):
+			# proj is the feature that allows to control the tightness.
+			# For mnist, input size is 784. Thus, all 784 input depdendency
+			# is kept in symbolic interal analysis and can provide tightest
+			# linear estimation. However, due to the cost limitation, we 
+			# might want to sacrifice certain tightness to make training 
+			# faster. The fastest one is to throw away all of the 
+			# dependency (proj=0) which is the same as naive interval 
+			# propagation.
 			if(self.proj is None):
 				ix = Symbolic_interval(\
 					   torch.clamp(X-self.epsilon, minimum, maximum),\
@@ -426,9 +434,15 @@ class Interval_Bound(nn.Module):
 					 )
 			else:
 				input_size = list(X[0].reshape(-1).size())[0]
-
-				
-				
+				# symbolic_interval_proj1 uses symbolic linear relaxation
+				# proposed in Neurify paper. It provides tight approximation
+				# when dependency are mostly kept. However, if over a half
+				# of the dependency is thrown away, the bound estimated might
+				# be worse than naive interval propagation. Therefore, we 
+				# have symbolic_interval_proj2. It just concretized when 
+				# the hidden node is cross-0. When the number of dependency 
+				# kept is close to 0, it will approach naive interval
+				# propagation.
 				if(self.proj>(input_size/2)):
 
 					X_var = Variable(X, requires_grad=True)
