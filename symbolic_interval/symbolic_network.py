@@ -9,7 +9,7 @@ Usage:
 for symbolic interval anlysis:
 	from symbolic_interval.symbolic_network import sym_interval_analyze
 for naive interval analysis:
-	from symbolic_interval.symbolic_network import sym_interval_analyze
+	from symbolic_interval.symbolic_network import naive_interval_analyze
 '''
 
 from __future__ import print_function
