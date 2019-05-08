@@ -49,8 +49,8 @@ class Interval_network(nn.Module):
 	'''Forward intervals for each layer.
 
 	* :attr:`ix` is the input fore each layer. If ix is a naive
-	interval, it will propagate naively. If ix is a symbolic interval,
-	it will propagate symbolicly.
+	interval, it will propagate naively. If ix is a symbolic 
+	interval, it will propagate symbolicly.
 	'''
 	def forward(self, ix):
 		for i, layer in enumerate(self.net):
@@ -87,7 +87,8 @@ class Interval_Dense(nn.Module):
 
 			ix.c = F.linear(c, self.layer.weight, bias=self.layer.bias)
 			ix.idep = F.linear(idep, self.layer.weight)
-			ix.idep_proj = F.linear(ix.idep_proj, self.layer.weight.abs())
+			ix.idep_proj = F.linear(ix.idep_proj,\
+							self.layer.weight.abs())
 
 			for i in range(len(edep)):
 				ix.edep[i] = F.linear(edep[i], self.layer.weight)
@@ -103,7 +104,8 @@ class Interval_Dense(nn.Module):
 
 			ix.c = F.linear(c, self.layer.weight, bias=self.layer.bias)
 			ix.idep = F.linear(idep, self.layer.weight)
-			ix.idep_proj = F.linear(ix.idep_proj, self.layer.weight.abs())
+			ix.idep_proj = F.linear(ix.idep_proj,\
+							self.layer.weight.abs())
 
 			ix.edep = F.linear(ix.edep, self.layer.weight.abs())
 
@@ -168,7 +170,8 @@ class Interval_Conv2d(nn.Module):
 			ix.idep = F.conv2d(idep, self.layer.weight, 
 						   stride=self.layer.stride,
 						   padding=self.layer.padding)
-			ix.idep_proj = F.conv2d(ix.idep_proj, self.layer.weight.abs(), 
+			ix.idep_proj = F.conv2d(ix.idep_proj,
+						   self.layer.weight.abs(), 
 						   stride=self.layer.stride,
 						   padding=self.layer.padding)
 
@@ -194,11 +197,13 @@ class Interval_Conv2d(nn.Module):
 			ix.idep = F.conv2d(idep, self.layer.weight, 
 						   stride=self.layer.stride,
 						   padding=self.layer.padding)
-			ix.idep_proj = F.conv2d(ix.idep_proj, self.layer.weight.abs(), 
+			ix.idep_proj = F.conv2d(ix.idep_proj,
+						   self.layer.weight.abs(), 
 						   stride=self.layer.stride,
 						   padding=self.layer.padding)
 
-			ix.edep = F.conv2d(ix.edep, self.layer.weight.abs(), 
+			ix.edep = F.conv2d(ix.edep,
+						   self.layer.weight.abs(), 
 						   stride=self.layer.stride,
 						   padding=self.layer.padding)
 
@@ -240,7 +245,8 @@ class Interval_ReLU(nn.Module):
 			appr_condition = ((lower<0)*(upper>0)).detach()
 			mask = (lower>0).type_as(lower)
 			mask[appr_condition] = upper[appr_condition]/\
-					(upper[appr_condition]-lower[appr_condition]).detach()
+							(upper[appr_condition] -\
+							lower[appr_condition]).detach()
 
 			m = int(appr_condition.sum().item())
 
@@ -251,14 +257,16 @@ class Interval_ReLU(nn.Module):
 			if (m!=0):
 
 				if(ix.use_cuda):
-					error_row = torch.zeros((m, ix.n), device=lower.get_device())
+					error_row = torch.zeros((m, ix.n),\
+									device=lower.get_device())
 				else:
 					error_row = torch.zeros((m, ix.n))
 
 				error_row = error_row.scatter_(1,\
 					appr_ind[:,1,None], appr_err[appr_condition][:,None])
 
-				edep_ind = lower.new(appr_ind.size(0),lower.size(0)).zero_()
+				edep_ind = lower.new(appr_ind.size(0),\
+									lower.size(0)).zero_()
 				edep_ind = edep_ind.scatter_(1, appr_ind[:,0][:,None], 1)
 
 			ix.c = ix.c*mask+appr_err*appr_condition.type_as(lower)
@@ -285,7 +293,8 @@ class Interval_ReLU(nn.Module):
 			appr_condition = ((lower<0)*(upper>0)).detach()
 			mask = (lower>0).type_as(lower)
 			mask[appr_condition] = upper[appr_condition]/\
-					(upper[appr_condition]-lower[appr_condition]).detach()
+								(upper[appr_condition] -\
+								lower[appr_condition]).detach()
 
 			m = int(appr_condition.sum().item())
 			appr_ind = appr_condition.view(-1,ix.n).nonzero()
@@ -295,15 +304,19 @@ class Interval_ReLU(nn.Module):
 			if (m!=0):
 
 				if(ix.use_cuda):
-					error_row = torch.zeros((m, ix.n), device=lower.get_device())
+					error_row = torch.zeros((m, ix.n),\
+								device=lower.get_device())
 				else:
 					error_row = torch.zeros((m, ix.n))
 
 				error_row = error_row.scatter_(1,\
-						appr_ind[:,1,None], appr_err[appr_condition][:,None])
+							appr_ind[:,1,None],\
+							appr_err[appr_condition][:,None])
 
-				edep_ind = lower.new(appr_ind.size(0),lower.size(0)).zero_()
-				edep_ind = edep_ind.scatter_(1, appr_ind[:,0][:,None], 1)
+				edep_ind = lower.new(appr_ind.size(0),\
+							lower.size(0)).zero_()
+				edep_ind = edep_ind.scatter_(1,\
+							appr_ind[:,0][:,None], 1)
 
 			ix.c = ix.c*mask+appr_err*appr_condition.type_as(lower)
 
@@ -395,7 +408,10 @@ class Interval_Bound(nn.Module):
 		self.use_cuda = use_cuda
 		self.proj = proj
 		if(proj is not None):
-			assert proj>0, "project dimension has to be larger than 0"
+			assert proj>0, "project dimension has to be larger than 0,"\
+					" please use naive bound propagation (proj=0)!"
+			assert (isinstance(proj, int)), "project dimension has to"\
+					" be integer!"
 
 		assert method in ["sym", "naive"],\
 				"No such interval methods!"
@@ -419,8 +435,8 @@ class Interval_Bound(nn.Module):
 
 		if(self.method == "sym"):
 			# proj is the feature that allows to control the tightness.
-			# For mnist, input size is 784. Thus, all 784 input depdendency
-			# is kept in symbolic interal analysis and can provide tightest
+			# For mnist, input size is 784. Thus, all 784 input deps
+			# is kept in symbolic interal analysis and provides tightest
 			# linear estimation. However, due to the cost limitation, we 
 			# might want to sacrifice certain tightness to make training 
 			# faster. The fastest one is to throw away all of the 
@@ -443,31 +459,37 @@ class Interval_Bound(nn.Module):
 				# the hidden node is cross-0. When the number of dependency 
 				# kept is close to 0, it will approach naive interval
 				# propagation.
-				if(self.proj>(input_size/2)):
 
-					X_var = Variable(X, requires_grad=True)
-					loss = nn.CrossEntropyLoss()\
-							(self.net(X_var), y)
-					loss.backward()
-					x_grad = X_var.grad.view(-1, input_size)
-					grad_ind = (x_grad.abs().topk(self.proj, dim=1)[1])
-					# We can set grad_ind as None to save the sort time
-					# As the tradeoff, the tightness will be worse
-					# grad_ind = None
+				if(self.proj>input_size):
+					warnings.warn("proj is larger than input size")
+					self.proj = input_size
+
+				X_var = Variable(X, requires_grad=True)
+				loss = nn.CrossEntropyLoss()\
+						(self.net(X_var), y)
+				loss.backward()
+				x_grad = X_var.grad.view(-1, input_size)
+				grad_ind = (x_grad.abs().topk(self.proj, dim=1)[1])
+				# We can set grad_ind as None to save the sort time
+				# As the tradeoff, the tightness will be worse
+				# grad_ind = None
+
+				if(self.proj>(input_size/2)):
 					ix = Symbolic_interval_proj1(\
-						   torch.clamp(X-self.epsilon, minimum, maximum),\
-						   torch.clamp(X+self.epsilon, minimum, maximum),\
-						   self.proj,\
-						   grad_ind,\
-						   self.use_cuda\
-						 )
+					   torch.clamp(X-self.epsilon, minimum, maximum),\
+					   torch.clamp(X+self.epsilon, minimum, maximum),\
+					   self.proj,\
+					   grad_ind,\
+					   self.use_cuda\
+					 )
 				else:
 					ix = Symbolic_interval_proj2(\
-						   torch.clamp(X-self.epsilon, minimum, maximum),\
-						   torch.clamp(X+self.epsilon, minimum, maximum),\
-						   self.proj,\
-						   self.use_cuda\
-						 )
+					   torch.clamp(X-self.epsilon, minimum, maximum),\
+					   torch.clamp(X+self.epsilon, minimum, maximum),\
+					   self.proj,\
+					   grad_ind,\
+					   self.use_cuda\
+					 )
 
 		# Propagate symbolic interval through interval networks
 		ix = inet(ix)
@@ -519,6 +541,14 @@ Args:
 	X and y: samples and lables
 	use_cuda: whether we want to use cuda
 	parallel: whehter we want to run on multiple gpus
+	proj: project dimension to adjust the dimension. 
+	Symbolic interval anlaysis keeps all of the input 
+	dimension (proj=input_size/None) and thus is the 
+	tigthest but needs more computations. 
+	Naive interval throws away all of the dependency (proj=0).
+	One can freely adjust tightness by controlling proj to be from
+	0 to input size. 
+	
 
 Return:
 	iloss: robust loss provided by symbolic interval analysis
@@ -530,10 +560,10 @@ def sym_interval_analyze(net, epsilon, X, y,\
 
 	if(parallel):
 		wc = nn.DataParallel(Interval_Bound(net, epsilon,\
-					method="sym", proj=proj, use_cuda=use_cuda))(X, y)
+				method="sym", proj=proj, use_cuda=use_cuda))(X, y)
 	else:
 		wc = Interval_Bound(net, epsilon,\
-					method="sym", proj=proj, use_cuda=use_cuda)(X, y)
+				method="sym", proj=proj, use_cuda=use_cuda)(X, y)
 
 	iloss = nn.CrossEntropyLoss()(wc, y)
 	ierr = (wc.max(1)[1] != y)

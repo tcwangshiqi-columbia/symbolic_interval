@@ -181,7 +181,7 @@ class Symbolic_interval(Interval):
 	def concretize(self):
 		self.extend()
 		if(self.edep):
-			# first only assume only one relu layer
+
 			e = (self.idep*self.e.view(self.batch_size,\
 					self.input_size, 1)).abs().sum(dim=1)
 			#print("sym e1", e)
@@ -328,7 +328,6 @@ class Symbolic_interval_proj1(Interval):
 	def concretize(self):
 		self.extend()
 
-		# first only assume only one relu layer
 		if(self.proj_ind is None):
 			e = (self.idep*self.e.view(self.batch_size,\
 				self.proj, 1)).abs().sum(dim=1)
@@ -422,7 +421,8 @@ class Symbolic_interval_proj2(Interval):
 	* :attr:`edep` keeps the error dependency introduced by each
 	  overestimated nodes.
 	'''
-	def __init__(self, lower, upper, proj=None, use_cuda=False):
+	def __init__(self, lower, upper, proj=None,\
+					proj_ind=None, use_cuda=False):
 		assert lower.shape[0]==upper.shape[0], "each symbolic"+\
 					"should have the same shape"
 		
@@ -440,22 +440,36 @@ class Symbolic_interval_proj2(Interval):
 
 		self.edep = self.e.new_zeros(self.e.shape)
 
-		if(proj>self.input_size):
-			warnings.warn("proj is larger than input size")
-			self.proj = self.input_size
+		self.proj_ind = proj_ind
+		self.proj = proj
+
+		if(proj_ind is None):
+		
+			idep_ind = np.arange(self.proj)
+			proj_ind = np.arange(self.proj, self.input_size)
+
+			self.idep_proj = self.idep[proj_ind].sum(dim=0).unsqueeze(0)
+			self.idep = self.idep[idep_ind].unsqueeze(0)
+			
+			self.idep_proj = self.idep_proj*self.e.\
+					view(self.batch_size, self.input_size)
+
+			self.e = self.e.view(self.batch_size,\
+							self.input_size)[:, idep_ind]
 		else:
-			self.proj = proj
-		
-		idep_ind = np.arange(self.proj)
-		proj_ind = np.arange(self.proj, self.input_size)
+			self.idep = self.idep.unsqueeze(0)*\
+						self.e.view(self.batch_size,1,self.n)
+			#print(self.idep.shape, proj_ind.shape)
+			self.idep = self.idep.gather(index=proj_ind.\
+						unsqueeze(-1).repeat(1,1,self.n), dim=1)
+			#print(self.idep.shape)
 
-		self.idep_proj = self.idep[proj_ind].sum(dim=0).unsqueeze(0)
-		self.idep = self.idep[idep_ind].unsqueeze(0)
-		
-		self.idep_proj = self.idep_proj*self.e.\
-				view(self.batch_size, self.input_size)
+			self.idep_proj = (self.idep.sum(dim=1)==0).type_as(self.idep)
+			self.idep_proj = self.idep_proj*\
+					self.e.view(self.batch_size, self.input_size)
+			#print("proj",self.idep_proj.shape)
 
-		self.e = self.e.view(self.batch_size, self.input_size)[:, idep_ind]
+
 
 
 	'''Calculating the upper and lower matrix for symbolic intervals.
@@ -465,9 +479,11 @@ class Symbolic_interval_proj2(Interval):
 	def concretize(self):
 		self.extend()
 
-		# first only assume only one relu layer
-		e = (self.idep*self.e.view(self.batch_size,\
+		if(self.proj_ind is None):
+			e = (self.idep*self.e.view(self.batch_size,\
 				self.proj, 1)).abs().sum(dim=1)
+		else:
+			e = self.idep.abs().sum(dim=1)
 		#print("e1", e)
 		e = e + self.idep_proj.abs()
 		#print("e2", e)
