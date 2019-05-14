@@ -450,6 +450,7 @@ class Interval_Bound(nn.Module):
 					 )
 			else:
 				input_size = list(X[0].reshape(-1).size())[0]
+				batch_size = list(X.size())[0]
 				# symbolic_interval_proj1 uses symbolic linear relaxation
 				# proposed in Neurify paper. It provides tight approximation
 				# when dependency are mostly kept. However, if over a half
@@ -464,15 +465,27 @@ class Interval_Bound(nn.Module):
 					warnings.warn("proj is larger than input size")
 					self.proj = input_size
 
+				# grad ind could be the largest absolute value of gradients
+				
 				X_var = Variable(X, requires_grad=True)
 				loss = nn.CrossEntropyLoss()\
 						(self.net(X_var), y)
 				loss.backward()
 				x_grad = X_var.grad.view(-1, input_size)
 				grad_ind = (x_grad.abs().topk(self.proj, dim=1)[1])
+				
+
 				# We can set grad_ind as None to save the sort time
 				# As the tradeoff, the tightness will be worse
-				# grad_ind = None
+				'''
+				grad_ind = None
+				'''
+
+				# grad_ind can also be random perturbed index
+				'''
+				grad_ind = torch.randperm(input_size).type_as(y)
+				grad_ind = grad_ind[:self.proj].unsqueeze(0).repeat(batch_size,1)
+				'''
 
 				if(self.proj>(input_size/2)):
 					ix = Symbolic_interval_proj1(\
