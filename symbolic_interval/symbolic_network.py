@@ -20,7 +20,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.autograd import Variable
 
-from .interval import Interval, Symbolic_interval
+from .interval import Interval, Symbolic_interval, Inverse_interval
 from .interval import Symbolic_interval_proj1, Symbolic_interval_proj2
 import time
 
@@ -112,6 +112,17 @@ class Interval_Dense(nn.Module):
 			ix.shape = list(ix.c.shape[1:])
 			ix.n = list(ix.c[0].view(-1).size())[0]
 			ix.concretize()
+			return ix
+
+		if(isinstance(ix, Inverse_interval)):
+			c = ix.c
+			e = ix.e
+			c = F.linear(c, self.layer.weight, bias=self.layer.bias)
+			e = F.linear(e, self.layer.weight)
+			#print("naive e", e)
+			#print("naive c", c)
+			ix.update_lu(c-e, c+e)
+			
 			return ix
 
 		if(isinstance(ix, Interval)):
@@ -210,6 +221,20 @@ class Interval_Conv2d(nn.Module):
 			ix.shape = list(ix.c.shape[1:])
 			ix.n = list(ix.c[0].reshape(-1).size())[0]
 			ix.concretize()
+			return ix
+
+		if(isinstance(ix, Inverse_interval)):
+			c = ix.c
+			e = ix.e
+			c = F.conv2d(c, self.layer.weight, 
+						   stride=self.layer.stride,
+						   padding=self.layer.padding, 
+						   bias=self.layer.bias)
+			e = F.conv2d(e, self.layer.weight, 
+						   stride=self.layer.stride,
+						   padding=self.layer.padding)
+			ix.update_lu(c-e, c+e)
+			
 			return ix
 
 		if(isinstance(ix, Interval)):
@@ -356,6 +381,30 @@ class Interval_ReLU(nn.Module):
 
 			return ix
 
+		if(isinstance(ix, Inverse_interval)):
+			lower = ix.l
+			upper = ix.u
+
+			#print("naive", upper)
+
+			if(ix.use_cuda):
+				appr_condition = ((lower<0) * (upper>0)).type(\
+					torch.Tensor).cuda(device=ix.c.get_device())
+			else:
+				appr_condition = ((lower<0) * (upper>0)).type(\
+							torch.Tensor)
+
+			mask = appr_condition*((upper)/(upper-lower+0.000001))
+			mask = mask + 1 - appr_condition
+			if(ix.use_cuda):
+				mask = mask*((upper>0).type(torch.Tensor).\
+					cuda(device=ix.c.get_device()))
+			else:
+				mask = mask*(upper>0).type(torch.Tensor)
+			ix.mask.append(mask)
+			#print(ix.e.shape)
+			ix.update_lu(F.relu(ix.l), F.relu(ix.u))
+			return ix
 
 		if(isinstance(ix, Interval)):
 			lower = ix.l
@@ -393,7 +442,8 @@ class Interval_Flatten(nn.Module):
 				isinstance(ix, Symbolic_interval_proj2)):
 			ix.extend()
 			return ix
-		if(isinstance(ix, Interval)):
+		if(isinstance(ix, Interval) or \
+			isinstance(ix, Inverse_interval)):
 			ix.update_lu(ix.l.view(ix.l.size(0), -1),\
 				ix.u.view(ix.u.size(0), -1))
 			return ix
@@ -413,7 +463,7 @@ class Interval_Bound(nn.Module):
 			assert (isinstance(proj, int)), "project dimension has to"\
 					" be integer!"
 
-		assert method in ["sym", "naive"],\
+		assert method in ["sym", "naive", "inverse"],\
 				"No such interval methods!"
 		self.method = method
 			
@@ -429,6 +479,11 @@ class Interval_Bound(nn.Module):
 		# Create symbolic inteval classes from X
 		if(self.method == "naive"):
 			ix = Interval(torch.clamp(X-self.epsilon, minimum, maximum),\
+					torch.clamp(X+self.epsilon, minimum, maximum),\
+					self.use_cuda\
+			 	)
+		if(self.method == "inverse"):
+			ix = Inverse_interval(torch.clamp(X-self.epsilon, minimum, maximum),\
 					torch.clamp(X+self.epsilon, minimum, maximum),\
 					self.use_cuda\
 			 	)
@@ -537,6 +592,36 @@ def naive_interval_analyze(net, epsilon, X, y,\
 				method="naive", use_cuda=use_cuda))(X, y)
 	else:
 		wc = Interval_Bound(net, epsilon, method="naive",\
+						use_cuda=use_cuda)(X, y)
+
+	iloss = nn.CrossEntropyLoss()(wc, y)
+	ierr = (wc.max(1)[1]!=y).type(torch.Tensor)
+	ierr = ierr.sum().item()/X.shape[0]
+
+	return iloss, ierr
+
+
+'''Inverse interval propagations.
+
+Args:
+	model: regular nn.Sequential models
+	epsilon: desired input ranges
+	X and y: samples and lables
+
+Return:
+	iloss: robust loss provided by naive interval analysis
+	ierr: verifiable robust error provided by naive interval analysis
+'''
+def inverse_interval_analyze(net, epsilon, X, y,\
+					use_cuda=True, parallel=False):
+
+	# Transfer original model to interval models
+
+	if(parallel):
+		wc = nn.DataParallel(Interval_Bound(net, epsilon,
+				method="inverse", use_cuda=use_cuda))(X, y)
+	else:
+		wc = Interval_Bound(net, epsilon, method="inverse",\
 						use_cuda=use_cuda)(X, y)
 
 	iloss = nn.CrossEntropyLoss()(wc, y)

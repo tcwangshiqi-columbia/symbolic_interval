@@ -20,6 +20,7 @@ import torchvision.datasets as datasets
 from symbolic_interval.symbolic_network import Interval_network
 from symbolic_interval.symbolic_network import sym_interval_analyze
 from symbolic_interval.symbolic_network import naive_interval_analyze
+from symbolic_interval.symbolic_network import inverse_interval_analyze
 
 from convex_adversarial import robust_loss	
 
@@ -113,7 +114,7 @@ if __name__ == '__main__':
 			X = X.cuda()
 			y = y.cuda().long()
 			model.cuda()
-
+		
 		if(PARALLEL):
 			# The first run with parallel will take a few seconds
 			# to warm up.
@@ -157,6 +158,16 @@ if __name__ == '__main__':
 		print ("naive loss:", iloss)
 		print ("naive err:", ierr)
 		print ("naive time per sample:",\
+					(time.time()-start)/X.shape[0])
+		del iloss, ierr
+		print()
+
+		iloss, ierr = inverse_interval_analyze(model, epsilon,\
+					X, y, use_cuda)
+
+		print ("inverse naive loss:", iloss)
+		print ("inverse naive err:", ierr)
+		print ("inverse naive time per sample:",\
 					(time.time()-start)/X.shape[0])
 		del iloss, ierr
 		print()

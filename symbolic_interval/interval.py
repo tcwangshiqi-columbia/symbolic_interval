@@ -51,7 +51,8 @@ class Interval():
 	  interval propagation and will introduce overestimation error. 
 	'''
 	def __init__(self, lower, upper, use_cuda=False):
-		assert not ((upper-lower)<0).any(), "upper less than lower"
+		if(not isinstance(self, Inverse_interval)):
+			assert not ((upper-lower)<0).any(), "upper less than lower"
 		self.l = lower
 		self.u = upper
 		self.c = (lower+upper)/2
@@ -67,7 +68,8 @@ class Interval():
 			lower: numpy matrix of the lower bound for each layer nodes
 			upper: numpy matrix of the upper bound for each layer nodes
 		'''
-		assert not ((upper-lower)<0).any(), "upper less than lower"
+		if(not isinstance(self, Inverse_interval)):
+			assert not ((upper-lower)<0).any(), "upper less than lower"
 		self.l = lower
 		self.u = upper
 		self.c = (lower+upper)/2
@@ -81,7 +83,8 @@ class Interval():
 			lower: numpy matrix of the lower bound for each layer nodes
 			upper: numpy matrix of the upper bound for each layer nodes
 		'''
-		assert not (error<0).any(), "upper less than lower"
+		if(not isinstance(self, Inverse_interval)):
+			assert not (error<0).any(), "upper less than lower"
 		self.c = center
 		self.e = error
 		self.u = self.c+self.e
@@ -106,16 +109,10 @@ class Interval():
 		'''
 		assert y.shape[0] == self.l.shape[0] == self.u.shape[0],\
 				"wrong input shape"
-		if(self.use_cuda):
-			u = torch.zeros(self.u.shape, device=self.u.get_device())
-		else:
-			u = torch.zeros(self.u.shape)
-		if(self.use_cuda): u = u.cuda()
-		for i in range(y.shape[0]):
-			t = self.l[i, y[i]]
-			u[i] = self.u[i]-t
-			u[i, y[i]] = 0.0
-		return u	
+		'''Taking the norm of the inverse interval for the worst case
+		'''
+		u = self.c.abs()+self.e.abs()
+		return u
 
 
 
@@ -257,6 +254,33 @@ class Symbolic_interval(Interval):
 		return self.u 
 
 
+
+class Inverse_interval(Interval):
+	def __init__(self, lower, upper, use_cuda=False):
+		assert lower.shape[0]==upper.shape[0], "each symbolic"+\
+					"should have the same shape"
+		
+		Interval.__init__(self, lower, upper)
+		self.use_cuda = use_cuda
+		self.shape = list(self.c.shape[1:])
+		self.n = list(self.c[0].reshape(-1).size())[0]
+		self.input_size = self.n
+		self.batch_size = self.c.shape[0]
+
+	def worst_case(self, y, output_size):
+		assert y.shape[0] == self.l.shape[0] == self.u.shape[0],\
+				"wrong input shape"
+		if(self.use_cuda):
+			u = torch.zeros(self.u.shape, device=self.u.get_device())
+		else:
+			u = torch.zeros(self.u.shape)
+		if(self.use_cuda): u = u.cuda()
+		for i in range(y.shape[0]):
+			t = self.l[i, y[i]]
+			u[i] = self.u[i]-t
+			u[i, y[i]] = 0.0
+		return u
+		
 
 
 class Symbolic_interval_proj1(Interval):
