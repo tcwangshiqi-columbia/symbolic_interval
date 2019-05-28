@@ -109,11 +109,37 @@ class Interval():
 		'''
 		assert y.shape[0] == self.l.shape[0] == self.u.shape[0],\
 				"wrong input shape"
+		if(self.use_cuda):
+			u = torch.zeros(self.u.shape, device=self.u.get_device())
+		else:
+			u = torch.zeros(self.u.shape)
+		if(self.use_cuda): u = u.cuda()
+		for i in range(y.shape[0]):
+			t = self.l[i, y[i]]
+			u[i] = self.u[i]-t
+			u[i, y[i]] = 0.0
+		return u
+
+
+class Inverse_interval(Interval):
+	def __init__(self, lower, upper, use_cuda=False):
+		assert lower.shape[0]==upper.shape[0], "each symbolic"+\
+					"should have the same shape"
+		
+		Interval.__init__(self, lower, upper)
+		self.use_cuda = use_cuda
+		self.shape = list(self.c.shape[1:])
+		self.n = list(self.c[0].reshape(-1).size())[0]
+		self.input_size = self.n
+		self.batch_size = self.c.shape[0]
+
+	def worst_case(self, y, output_size):
+		assert y.shape[0] == self.l.shape[0] == self.u.shape[0],\
+				"wrong input shape"
 		'''Taking the norm of the inverse interval for the worst case
 		'''
 		u = self.c.abs()+self.e.abs()
 		return u
-
 
 
 class Symbolic_interval(Interval):
@@ -255,7 +281,7 @@ class Symbolic_interval(Interval):
 
 
 
-class Inverse_interval(Interval):
+class Center_symbolic_interval(Interval):
 	def __init__(self, lower, upper, use_cuda=False):
 		assert lower.shape[0]==upper.shape[0], "each symbolic"+\
 					"should have the same shape"
@@ -266,23 +292,73 @@ class Inverse_interval(Interval):
 		self.n = list(self.c[0].reshape(-1).size())[0]
 		self.input_size = self.n
 		self.batch_size = self.c.shape[0]
-
-	def worst_case(self, y, output_size):
-		assert y.shape[0] == self.l.shape[0] == self.u.shape[0],\
-				"wrong input shape"
 		if(self.use_cuda):
-			u = torch.zeros(self.u.shape, device=self.u.get_device())
+			self.idep = torch.eye(self.n, device=\
+					self.c.get_device()).unsqueeze(0)
 		else:
-			u = torch.zeros(self.u.shape)
-		if(self.use_cuda): u = u.cuda()
-		for i in range(y.shape[0]):
-			t = self.l[i, y[i]]
-			u[i] = self.u[i]-t
-			u[i, y[i]] = 0.0
-		return u
+			self.idep = torch.eye(self.n).unsqueeze(0)
 		
 
+	'''Calculating the upper and lower matrix for symbolic intervals.
+	To make concretize easier, convolutional layer nodes will be 
+	extended first.
+	'''
+	def concretize(self):
+		self.extend()
+		e = (self.idep*self.e.view(self.batch_size,\
+					self.input_size, 1)).abs().sum(dim=1)
 
+		self.l = self.c - e
+		self.u = self.c + e
+
+		return self
+
+
+	'''Extending convolutional layer nodes to a two-dimensional vector.
+	'''
+	def extend(self):
+		self.c = self.c.reshape(self.batch_size, self.n)
+		self.idep = self.idep.reshape(-1, self.input_size, self.n)
+
+
+	'''Convert the extended layer back to the shape stored in `shape`.
+	'''
+	def shrink(self):
+		self.c = self.c.reshape(tuple([-1]+self.shape))
+		self.idep = self.idep.reshape(tuple([-1]+self.shape))
+
+
+	'''Calculate the wrost case of the analyzed output ranges.
+	Return the upper bound of other output dependency minus target's
+	output dependency. If the returned value is less than 0, it means
+	the worst case provided by interval analysis will never be larger
+	than the target label y's. 
+	'''
+	def worst_case(self, y, output_size):
+
+		assert y.shape[0] == self.l.shape[0] == self.batch_size,\
+								"wrong label shape"
+		if(self.use_cuda):
+			kk = torch.eye(output_size, dtype=torch.uint8,\
+				requires_grad=False, device=y.get_device())[y]
+		else:
+			kk = torch.eye(output_size, dtype=torch.uint8,\
+					requires_grad=False)[y]
+
+		c_t = self.c.masked_select(kk).unsqueeze(1)
+		self.c = self.c - c_t
+
+		idep_t = self.idep.masked_select(\
+					kk.view(self.batch_size,1,output_size)).\
+					view(self.batch_size, self.input_size,1)
+		self.idep = self.idep-idep_t
+
+		self.concretize()
+
+		return self.u
+
+
+		
 class Symbolic_interval_proj1(Interval):
 	'''
 	* :attr:`shape` is the input shape of ReLU layers.

@@ -21,6 +21,7 @@ from symbolic_interval.symbolic_network import Interval_network
 from symbolic_interval.symbolic_network import sym_interval_analyze
 from symbolic_interval.symbolic_network import naive_interval_analyze
 from symbolic_interval.symbolic_network import inverse_interval_analyze
+from symbolic_interval.symbolic_network import center_symbolic_interval_analyze
 
 from convex_adversarial import robust_loss	
 
@@ -118,7 +119,7 @@ if __name__ == '__main__':
 			X = X.cuda()
 			y = y.cuda().long()
 			model.cuda()
-
+		'''
 		if(PARALLEL):
 			# The first run with parallel will take a few seconds
 			# to warm up.
@@ -141,7 +142,7 @@ if __name__ == '__main__':
 		del eric_loss, eric_err
 		print()
 
-
+		'''
 		#if(method == BASELINE):
 		start = time.time()
 
@@ -166,6 +167,17 @@ if __name__ == '__main__':
 		del iloss, ierr
 		print()
 
+		iloss, ierr = center_symbolic_interval_analyze(model, epsilon,\
+					X, y, use_cuda)
+
+		print ("center sym loss:", iloss)
+		print ("center sym err:", ierr)
+		print ("center sym time per sample:",\
+					(time.time()-start)/X.shape[0])
+		del iloss, ierr
+		print()
+
+		# inverse interval analysis
 		iloss, ierr = inverse_interval_analyze(model, epsilon,\
 					X, y, use_cuda)
 

@@ -20,7 +20,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.autograd import Variable
 
-from .interval import Interval, Symbolic_interval, Inverse_interval
+from .interval import Interval, Symbolic_interval, Inverse_interval, Center_symbolic_interval
 from .interval import Symbolic_interval_proj1, Symbolic_interval_proj2
 import time
 
@@ -65,7 +65,17 @@ class Interval_Dense(nn.Module):
 		self.first_layer = first_layer
 
 	def forward(self, ix):
-		
+		if(isinstance(ix, Center_symbolic_interval)):
+			c = ix.c
+			idep = ix.idep
+			#print (ix.c.shape, self.layer.weight.shape)
+			ix.c = F.linear(c, self.layer.weight, bias=self.layer.bias)
+			ix.idep = F.linear(idep, self.layer.weight)
+			ix.shape = list(ix.c.shape[1:])
+			ix.n = list(ix.c[0].view(-1).size())[0]
+			ix.concretize()
+			return ix
+
 		if(isinstance(ix, Symbolic_interval)):
 			c = ix.c
 			idep = ix.idep
@@ -145,7 +155,23 @@ class Interval_Conv2d(nn.Module):
 		#print ("conv2d:", self.layer.weight.shape)
 
 	def forward(self, ix):
-		
+		if(isinstance(ix, Center_symbolic_interval)):
+			ix.shrink()
+			c = ix.c
+			idep = ix.idep
+			ix.c = F.conv2d(c, self.layer.weight, 
+						   stride=self.layer.stride,
+						   padding=self.layer.padding, 
+						   bias=self.layer.bias)
+			ix.idep = F.conv2d(idep, self.layer.weight, 
+						   stride=self.layer.stride,
+						   padding=self.layer.padding)
+
+			ix.shape = list(ix.c.shape[1:])
+			ix.n = list(ix.c[0].reshape(-1).size())[0]
+			ix.concretize()
+			return ix
+
 		if(isinstance(ix, Symbolic_interval)):
 			ix.shrink()
 			c = ix.c
@@ -261,6 +287,25 @@ class Interval_ReLU(nn.Module):
 	def forward(self, ix):
 		#print(ix.u)
 		#print(ix.l)
+		if(isinstance(ix, Center_symbolic_interval)):
+			lower = ix.l
+			upper = ix.u
+			#print("sym u", upper)
+			#print("sym l", lower)
+
+			appr_condition = ((lower<0)*(upper>0)).detach()
+			mask = (lower>0).type_as(lower)
+			mask[appr_condition] = upper[appr_condition]/\
+							(upper[appr_condition] -\
+							lower[appr_condition]).detach()
+
+			new_mask = (ix.c>=0).type_as(ix.c)
+
+			ix.c = ix.c*mask
+			ix.idep = ix.idep*new_mask.view(ix.batch_size, 1, ix.n)
+
+			return ix
+
 		if(isinstance(ix, Symbolic_interval)):
 			lower = ix.l
 			upper = ix.u
@@ -439,7 +484,8 @@ class Interval_Flatten(nn.Module):
 	def forward(self, ix):
 		if(isinstance(ix, Symbolic_interval) or\
 				isinstance(ix, Symbolic_interval_proj1) or\
-				isinstance(ix, Symbolic_interval_proj2)):
+				isinstance(ix, Symbolic_interval_proj2) or\
+				isinstance(ix, Center_symbolic_interval)):
 			ix.extend()
 			return ix
 		if(isinstance(ix, Interval) or \
@@ -463,7 +509,7 @@ class Interval_Bound(nn.Module):
 			assert (isinstance(proj, int)), "project dimension has to"\
 					" be integer!"
 
-		assert method in ["sym", "naive", "inverse"],\
+		assert method in ["sym", "naive", "inverse", "center_sym"],\
 				"No such interval methods!"
 		self.method = method
 			
@@ -487,6 +533,12 @@ class Interval_Bound(nn.Module):
 					torch.clamp(X+self.epsilon, minimum, maximum),\
 					self.use_cuda\
 			 	)
+		if(self.method == "center_sym"):
+			ix = Center_symbolic_interval(\
+					torch.clamp(X-self.epsilon, minimum, maximum),\
+					torch.clamp(X+self.epsilon, minimum, maximum),\
+					self.use_cuda\
+				)
 
 		if(self.method == "sym"):
 			# proj is the feature that allows to control the tightness.
@@ -622,6 +674,37 @@ def inverse_interval_analyze(net, epsilon, X, y,\
 				method="inverse", use_cuda=use_cuda))(X, y)
 	else:
 		wc = Interval_Bound(net, epsilon, method="inverse",\
+						use_cuda=use_cuda)(X, y)
+
+	iloss = nn.CrossEntropyLoss()(wc, y)
+	ierr = (wc.max(1)[1]!=y).type(torch.Tensor)
+	ierr = ierr.sum().item()/X.shape[0]
+
+	return iloss, ierr
+
+
+
+'''Inverse interval propagations.
+
+Args:
+	model: regular nn.Sequential models
+	epsilon: desired input ranges
+	X and y: samples and lables
+
+Return:
+	iloss: robust loss provided by naive interval analysis
+	ierr: verifiable robust error provided by naive interval analysis
+'''
+def center_symbolic_interval_analyze(net, epsilon, X, y,\
+					use_cuda=True, parallel=False):
+
+	# Transfer original model to interval models
+
+	if(parallel):
+		wc = nn.DataParallel(Interval_Bound(net, epsilon,
+				method="center_sym", use_cuda=use_cuda))(X, y)
+	else:
+		wc = Interval_Bound(net, epsilon, method="center_sym",\
 						use_cuda=use_cuda)(X, y)
 
 	iloss = nn.CrossEntropyLoss()(wc, y)
