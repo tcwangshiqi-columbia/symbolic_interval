@@ -90,13 +90,17 @@ if __name__ == '__main__':
 
 	use_cuda = torch.cuda.is_available()
 
-	MODEL_NAME = "mnist_small_baseline.h5"
-	model = mnist_model()
-	
+	MODEL_NAME = "mnist_small_baseline.pth"
+	'''
 	if(not use_cuda):
 		model = torch.load(MODEL_NAME, map_location={'cuda:0': 'cpu'})[0]
 	else:
 		model = torch.load(MODEL_NAME)[0]
+	'''
+	model = mnist_model()
+	model.load_state_dict(torch.load(MODEL_NAME))
+	if(use_cuda):
+		model = model.cuda()
 
 	#model = toy_model()
 	epsilon = 0.1
@@ -114,7 +118,7 @@ if __name__ == '__main__':
 			X = X.cuda()
 			y = y.cuda().long()
 			model.cuda()
-		
+
 		if(PARALLEL):
 			# The first run with parallel will take a few seconds
 			# to warm up.
