@@ -658,23 +658,3 @@ class Symbolic_interval_proj2(Interval):
 
 
 
-
-class Crown(Interval):
-	def __init__(self, lower, upper):
-		Interval.__init__(self, lower, upper)
-		self.shape = list(self.c.shape[1:])
-		self.n = list(self.c[0].reshape(-1).size())[0]
-
-		self.idep = torch.eye(self.n)*self.e.reshape(-1,1)
-
-		self.edep = torch.zeros((1, self.n))
-
-
-
-
-class Zonotope(Interval):
-	def __init__(self, lower, upper):
-		Interval.__init__(self, lower, upper)
-		raise NotImplementedError
-
-
