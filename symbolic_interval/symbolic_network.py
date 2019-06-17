@@ -1,10 +1,11 @@
 '''
 Interval networks and symbolic interval propagations.
-Top contributor: Shiqi Wang
-The basic network structures are inspired by the implementations of
-Eric Wong's convex polytope github available at:
-https://github.com/locuslab/convex_adversarial
-
+** Top contributor: Shiqi Wang
+** This file is part of the symbolic interval analysis library.
+** Copyright (c) 2018-2019 by the authors listed in the file LICENSE
+** and their institutional affiliations.
+** All rights reserved.
+ 
 Usage: 
 for symbolic interval anlysis:
 	from symbolic_interval.symbolic_network import sym_interval_analyze

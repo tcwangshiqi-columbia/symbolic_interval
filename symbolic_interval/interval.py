@@ -1,6 +1,10 @@
 '''
 Interval class definitions
-Top contributor: Shiqi Wang
+** Top contributor: Shiqi Wang
+** This file is part of the symbolic interval analysis library.
+** Copyright (c) 2018-2019 by the authors listed in the file LICENSE
+** and their institutional affiliations.
+** All rights reserved.
 '''
 
 from __future__ import print_function

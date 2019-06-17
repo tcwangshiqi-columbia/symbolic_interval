@@ -1,9 +1,15 @@
 '''
-Test file for different sound propagation methods
-Top contributor: Shiqi Wang
-The basic network structures are inspired by the implementations of
-Eric Wong's convex polytope github available at:
-https://github.com/locuslab/convex_adversarial
+ Test file for different sound propagation methods
+ ** Top contributors:
+ **   Shiqi Wang
+ ** This file is part of the symbolic interval analysis library.
+ ** Copyright (c) 2018-2019 by the authors listed in the file LICENSE
+ ** and their institutional affiliations.
+ ** All rights reserved.
+
+ The basic network structures are inspired by the implementations of
+ Eric Wong's convex polytope github available at 
+ https://github.com/locuslab/convex_adversarial
 '''
 
 
