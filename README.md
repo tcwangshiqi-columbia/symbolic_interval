@@ -1,4 +1,4 @@
-# Library of Symbolic Interval Analysis
+# Symbolic Interval Analysis Library
 
 ## Introduction
 
@@ -49,7 +49,7 @@ from symbolic_interval.symbolic_network import naive_interval_analyze
 
 If you find any issues with the code or have any question about symbolic interval analysis, please contact [Shiqi Wang](https://www.cs.columbia.edu/~tcwangshiqi/) (tcwangshiqi@cs.columbia.edu).
 
-## Citing ReluVal
+## Citing symbolic interval analysis library
 
 ```
 @inproceedings {shiqi2018reluval,
