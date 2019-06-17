@@ -2,19 +2,19 @@
 
 ## Introduction
 
-Symbolic interval analysis is a formal analysis method for certifying the robustness of neural networks based on interval. Given a bounded-input range, the targeted network is relaxed to a interval-based version such that it can directly take in arbitrary input interval and return a output interval. Also, to make the estimation more accurate, dependency of the input will be kept as a symbolic interval such that our interval-based network can propagate it layer by layer and return a output symbolic interval. The output interval/symbolic interval will always overapproximate the ground-truth output range. The details of symbolic interval is first proposed in [ReluVal](https://arxiv.org/pdf/1804.10829.pdf) and further improved in [Neurify](https://arxiv.org/pdf/1809.08098.pdf). 
+Symbolic interval analysis is a formal analysis method for certifying the robustness of neural networks. Any safety properties of neural networks can be presented as a bounded input range, a targeted network, and a desired output behavior. Symbolic interval analysis will relax the network to an interval-based version such that it can directly take in arbitrary input interval and return an output interval. Such an analysis is sound, as it will always over-approximate the ground-truth output range of network within the given input range. Also, to make the estimations more accurate, the dependencies of the network inputs can be kept as a symbolic interval such that our interval-based network can propagate it layer by layer and return an output symbolic interval. The output interval/symbolic interval can then be used to verify the safety properties. The details of symbolic interval is first proposed in [ReluVal](https://arxiv.org/pdf/1804.10829.pdf) and further improved in [Neurify](https://arxiv.org/pdf/1809.08098.pdf). You can find simple examples in ReluVal papers.
 
 
 ## Applications of symbolic interval analysis
-Symbolic interval analysis can be applied in various applications:
+Symbolic interval analysis can be applied in various applications.
 
 ### Formal verification of neural networks
-Symbolic interval analysis can be combined with iterative input bisection. We have presented [ReluVal](https://arxiv.org/pdf/1804.10829.pdf) (code available at https://github.com/tcwangshiqi-columbia/ReluVal) which is currently the state-of-the-art verifier for verifying small datasets like ACAS Xu.
+Symbolic interval analysis can be combined with iterative input bisections. We have presented [ReluVal](https://arxiv.org/pdf/1804.10829.pdf) (code available at https://github.com/tcwangshiqi-columbia/ReluVal) which is currently the state-of-the-art verifier for verifying small datasets like ACAS Xu.
 
-On the other hand, symbolic interval analysis is an important part of [Neurify](https://arxiv.org/pdf/1809.08098.pdf) (code available at https://github.com/tcwangshiqi-columbia/Neurify), which is one of the state-of-the-art verifiers for verifying large convolutional networks (over 10,000 ReLUs) on various safety properties. Specifically, it can be used to identify key non-linear ReLUs and linear solver will further be called to efficiently verify large networks.
+On the other hand, symbolic interval analysis is an important part of [Neurify](https://arxiv.org/pdf/1809.08098.pdf) (code available at https://github.com/tcwangshiqi-columbia/Neurify), which is one of the state-of-the-art verifiers for verifying large convolutional networks (over 10,000 ReLUs) on various safety properties. Specifically, it can be used to identify key non-linear ReLUs and a linear solver can be further called to efficiently verify large networks.
 
 ### Training verifiable robust networks
-To let the network learn to be robust and also to be easily verified, symbolic interval analysis can be incorporated into training process. We present MixTrain (details can be found at https://arxiv.org/pdf/1811.02625.pdf) for effeciently improving the veriable robustness of trained networks. MixTrain is now one of the state-of-the-art certifiable training strategies.
+To let the network learn to be robust and also to be easily verified, symbolic interval analysis can be incorporated into the training process. We present [MixTrain](https://arxiv.org/pdf/1811.02625.pdf) for efficiently improving the verifiable robustness of trained networks. MixTrain is now one of the state-of-the-art scalable certifiable training methods.
 
 ### Enhancing gradient-based attacks
 Futhermore, we present [interval attack](https://arxiv.org/pdf/1906.02282.pdf) (code available at https://github.com/tcwangshiqi-columbia/Interval-Attack) by applying symbolic interval analysis to enhance the state-of-the-art gradient-based attacks like PGD or CW attacks. 
@@ -24,7 +24,7 @@ Futhermore, we present [interval attack](https://arxiv.org/pdf/1906.02282.pdf) (
 
 ### Prerequisites
 
-The code is tested with python3 and PyTorch v1.0 with or without CUDA.
+The code is tested with python3 and PyTorch v1.0 with and without CUDA.
 
 ```
 git clone https://github.com/tcwangshiqi-columbia/symbolic_interval
@@ -74,6 +74,7 @@ If you find any issues with the code or have any question about symbolic interva
 ## Contributors
 
 * [Shiqi Wang](https://sites.google.com/view/tcwangshiqi) - tcwangshiqi@cs.columbia.edu
+* [Yizheng Chen](https://surrealyz.github.io/) - surrealyz@gmail.com
 * [Kexin Pei](https://sites.google.com/site/kexinpeisite/) - kpei@cs.columbia.edu
 * [Justin Whitehouse](https://www.college.columbia.edu/node/11475) - jaw2228@columbia.edu
 * [Junfeng Yang](http://www.cs.columbia.edu/~junfeng/) - junfeng@cs.columbia.edu
