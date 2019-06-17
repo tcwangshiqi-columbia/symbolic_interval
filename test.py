@@ -20,10 +20,8 @@ import torchvision.datasets as datasets
 from symbolic_interval.symbolic_network import Interval_network
 from symbolic_interval.symbolic_network import sym_interval_analyze
 from symbolic_interval.symbolic_network import naive_interval_analyze
-from symbolic_interval.symbolic_network import inverse_interval_analyze
-from symbolic_interval.symbolic_network import center_symbolic_interval_analyze
 
-from convex_adversarial import robust_loss	
+import argparse
 
 import time
 
@@ -35,6 +33,7 @@ design your own models.
 class Flatten(nn.Module):
 	def forward(self, x):
 		return x.view(x.size(0), -1)
+
 
 '''Test MNIST models.
 Please use nn.Sequential to build the models.
@@ -52,6 +51,7 @@ def mnist_model():
 	)
 	return model
 
+
 torch.manual_seed(7)
 
 '''Test toy fully connected mnist models.
@@ -68,6 +68,7 @@ def toy_model():
 		)
 	return model
 
+
 def mnist_loaders(batch_size, shuffle_test=False): 
 	mnist_train = datasets.MNIST("./data", train=True, download=True,\
 				transform=transforms.ToTensor())
@@ -81,7 +82,6 @@ def mnist_loaders(batch_size, shuffle_test=False):
 	return train_loader, test_loader
 
 
-
 '''main function of this test script.
 It compares the average tightness, loss, and efficiency of each
 propagation methods.
@@ -89,36 +89,48 @@ You can test on you own models, desired epsilon, and batch_size.
 '''
 if __name__ == '__main__':
 
+	parser = argparse.ArgumentParser()
+	parser.add_argument('--batch_size', type=int, default=10)
+	parser.add_argument('--method', default="sym")
+	parser.add_argument('--proj', type=int, default=None)
+	parser.add_argument('--epsilon', type=float, default=0.1)
+	parser.add_argument('--PARALLEL', action='store_true', default=False)
+	parser.add_argument('--compare_all', action='store_true', default=False)
+	args = parser.parse_args()
+
 	use_cuda = torch.cuda.is_available()
 
+	# load model
 	MODEL_NAME = "mnist_small_baseline.pth"
-	'''
-	if(not use_cuda):
-		model = torch.load(MODEL_NAME, map_location={'cuda:0': 'cpu'})[0]
-	else:
-		model = torch.load(MODEL_NAME)[0]
-	'''
 	model = mnist_model()
-	model.load_state_dict(torch.load(MODEL_NAME))
-	if(use_cuda):
+	if use_cuda:
+		model.load_state_dict(torch.load(MODEL_NAME))
 		model = model.cuda()
+	else:
+		model.load_state_dict(torch.load(MODEL_NAME, map_location={'cuda:0': 'cpu'}))
 
 	#model = toy_model()
-	epsilon = 0.1
-	batch_size = 10
-	PARALLEL = False
+	epsilon = args.epsilon
+	batch_size = args.batch_size
+	PARALLEL = args.PARALLEL
 
-	if(not use_cuda):
+	if not use_cuda:
 		PARALLEL = False
 
 	train_loader, test_loader = mnist_loaders(batch_size)	
 	
+	# Fetch test samples
 	for i, (X,y) in enumerate(test_loader):
 		
 		if(use_cuda):
 			X = X.cuda()
 			y = y.cuda().long()
 			model.cuda()
+		break
+
+
+	if(args.method=="eric" or args.compare_all):
+		from convex_adversarial import robust_loss
 		'''
 		if(PARALLEL):
 			# The first run with parallel will take a few seconds
@@ -126,8 +138,8 @@ if __name__ == '__main__':
 			eric_loss, eric_err = robust_loss(model,\
 						 epsilon, X, y, parallel=PARALLEL)
 			del eric_loss, eric_err
-
-		#if(method == ERIC_DUAL):
+		'''
+			
 		start = time.time()
 		eric_loss, eric_err = robust_loss(model,\
 				epsilon, X, y,parallel=True,\
@@ -142,7 +154,9 @@ if __name__ == '__main__':
 		del eric_loss, eric_err
 		print()
 
-		'''
+	if args.method=="baseline" or args.compare_all:
+
+		
 		#if(method == BASELINE):
 		start = time.time()
 
@@ -154,7 +168,7 @@ if __name__ == '__main__':
 		print() 
 		
 
-		#if(method == NAIVE_INTERVAL):
+	if args.method == "naive" or args.compare_all:
 		start = time.time()
 
 		iloss, ierr = naive_interval_analyze(model, epsilon,\
@@ -166,34 +180,14 @@ if __name__ == '__main__':
 					(time.time()-start)/X.shape[0])
 		del iloss, ierr
 		print()
-
-		iloss, ierr = center_symbolic_interval_analyze(model, epsilon,\
-					X, y, use_cuda)
-
-		print ("center sym loss:", iloss)
-		print ("center sym err:", ierr)
-		print ("center sym time per sample:",\
-					(time.time()-start)/X.shape[0])
-		del iloss, ierr
-		print()
-
-		# inverse interval analysis
-		iloss, ierr = inverse_interval_analyze(model, epsilon,\
-					X, y, use_cuda)
-
-		print ("inverse naive loss:", iloss)
-		print ("inverse naive err:", ierr)
-		print ("inverse naive time per sample:",\
-					(time.time()-start)/X.shape[0])
-		del iloss, ierr
-		print()
 		
 
-		#if(method == SYM_INTERVAL):	
+	if args.method == "sym" or args.compare_all:	
 		start = time.time()
 
 		iloss, ierr = sym_interval_analyze(model, epsilon,\
-						X, y, use_cuda, parallel=PARALLEL)
+						X, y, use_cuda, parallel=PARALLEL,\
+						proj=args.proj)
 			
 
 		print ("sym loss:", iloss)
@@ -202,21 +196,6 @@ if __name__ == '__main__':
 					(time.time()-start))
 		del iloss, ierr
 		print()
-
-
-		start = time.time()
-
-		iloss, ierr = sym_interval_analyze(model, epsilon,\
-					X, y, use_cuda, parallel=PARALLEL, proj=700)
-			
-
-		print ("sym loss:", iloss)
-		print ("sym err:", ierr)
-		print("sym time per sample:",\
-					(time.time()-start))
-		del iloss, ierr
-
-		exit()
 
 
 
