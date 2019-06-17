@@ -1,12 +1,9 @@
-# Library of symbolic interval analysis
+# Library of Symbolic Interval Analysis
 
 ## Introduction
 
 Symbolic interval analysis is a formal analysis method for certifying the robustness of neural networks based on interval. Given a bounded-input range, the targeted network is relaxed to a interval-based version such that it can directly take in arbitrary input interval and return a output interval. Also, to make the estimation more accurate, dependency of the input will be kept as a symbolic interval such that our interval-based network can propagate it layer by layer and return a output symbolic interval. The output interval/symbolic interval will always overapproximate the ground-truth output range. The details of symbolic interval is first proposed in [ReluVal](https://arxiv.org/pdf/1804.10829.pdf) and further improved in [Neurify](https://arxiv.org/pdf/1809.08098.pdf). 
 
-### Reporting bugs
-
-If you find any issues with the code or have any question about symbolic interval analysis, please contact [Shiqi Wang](https://www.cs.columbia.edu/~tcwangshiqi/) (tcwangshiqi@cs.columbia.edu).
 
 ## Applications of symbolic interval analysis
 Symbolic interval analysis can be applied in various applications:
@@ -48,6 +45,10 @@ from symbolic_interval.symbolic_network import sym_interval_analyze
 from symbolic_interval.symbolic_network import naive_interval_analyze
 ```
 
+## Reporting bugs
+
+If you find any issues with the code or have any question about symbolic interval analysis, please contact [Shiqi Wang](https://www.cs.columbia.edu/~tcwangshiqi/) (tcwangshiqi@cs.columbia.edu).
+
 ## Citing ReluVal
 
 ```
@@ -61,11 +62,11 @@ from symbolic_interval.symbolic_network import naive_interval_analyze
 	publisher = {{USENIX} Association},
 }
 @inproceedings{wang2018efficient,
-  title={Efficient formal safety analysis of neural networks},
-  author={Wang, Shiqi and Pei, Kexin and Whitehouse, Justin and Yang, Junfeng and Jana, Suman},
-  booktitle={Advances in Neural Information Processing Systems},
-  pages={6367--6377},
-  year={2018}
+ 	title={Efficient formal safety analysis of neural networks},
+ 	author={Wang, Shiqi and Pei, Kexin and Whitehouse, Justin and Yang, Junfeng and Jana, Suman},
+ 	booktitle={Advances in Neural Information Processing Systems},
+ 	pages={6367--6377},
+ 	year={2018}
 }
 ```
 
