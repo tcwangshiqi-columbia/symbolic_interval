@@ -31,10 +31,17 @@ git clone https://github.com/tcwangshiqi-columbia/symbolic_interval
 ```
 
 ### Examples
-One can run the test file by
+One can run the test file with symbolic interval analysis by
 ```
 cd symbolic_interval
-python test.py
+python test.py --method sym
+```
+
+To run and compare with existing methods like ConvexDual, one can run
+```
+cd symbolic_interval
+git clone https://github.com/locuslab/convex_adversarial
+python test.py --compare_all
 ```
 
 ### APIs

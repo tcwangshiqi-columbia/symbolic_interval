@@ -5,7 +5,7 @@ Interval networks and symbolic interval propagations.
 ** Copyright (c) 2018-2019 by the authors listed in the file LICENSE
 ** and their institutional affiliations.
 ** All rights reserved.
- 
+
 Usage: 
 for symbolic interval anlysis:
 	from symbolic_interval.symbolic_network import sym_interval_analyze
@@ -636,7 +636,7 @@ Return:
 	ierr: verifiable robust error provided by naive interval analysis
 '''
 def naive_interval_analyze(net, epsilon, X, y,\
-					use_cuda=True, parallel=False):
+					use_cuda=True, parallel=False, norm="linf"):
 
 	# Transfer original model to interval models
 
@@ -738,7 +738,7 @@ Return:
 	interval analysis
 '''
 def sym_interval_analyze(net, epsilon, X, y,\
-					use_cuda=True, parallel=False, proj=None):
+					use_cuda=True, parallel=False, proj=None, norm="linf"):
 
 	if(parallel):
 		wc = nn.DataParallel(Interval_Bound(net, epsilon,\

@@ -135,7 +135,7 @@ if __name__ == '__main__':
 		break
 
 
-	if(args.method=="eric" or args.compare_all):
+	if args.method=="convexdual" or args.compare_all:
 		from convex_adversarial import robust_loss
 		'''
 		if(PARALLEL):
