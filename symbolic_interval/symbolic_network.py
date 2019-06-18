@@ -54,6 +54,7 @@ class Interval_network(nn.Module):
 	interval, it will propagate symbolicly.
 	'''
 	def forward(self, ix):
+
 		for i, layer in enumerate(self.net):
 			ix = layer(ix)
 		return ix
@@ -498,7 +499,7 @@ class Interval_Flatten(nn.Module):
 
 class Interval_Bound(nn.Module):
 	def __init__(self, net, epsilon, method="sym",\
-					proj=None, use_cuda=True):
+					proj=None, use_cuda=True, norm="linf"):
 		nn.Module.__init__(self)
 		self.net = net
 		self.epsilon = epsilon
@@ -513,15 +514,32 @@ class Interval_Bound(nn.Module):
 		assert method in ["sym", "naive", "inverse", "center_sym"],\
 				"No such interval methods!"
 		self.method = method
+		self.norm = norm
 			
 
 	def forward(self, X, y):
-		minimum = X.min()
-		maximum = X.max()
+		
 		out_features = self.net[-1].out_features
 
 		# Transfer original model to interval models
-		inet = Interval_network(self.net)
+		if self.norm == "linf":
+			inet = Interval_network(self.net)
+			
+
+		if self.norm == "l2":
+			print("Transfer l2 norm to linf norm")
+			inet = Interval_network(self.net[1:])
+			X = self.net[0](X)
+			self.epsilon = (self.net[0].weight * self.net[0].weight)\
+							.sum(dim=3, keepdim=False)\
+							.sum(dim=2, keepdim=False)\
+							.sum(dim=1, keepdim=False)\
+							.sqrt() * self.epsilon
+			self.epsilon = self.epsilon.unsqueeze(dim=0).unsqueeze(dim=2).unsqueeze(dim=3)
+
+		
+		minimum = X.min().item()
+		maximum = X.max().item()
 
 		# Create symbolic inteval classes from X
 		if(self.method == "naive"):
@@ -554,7 +572,7 @@ class Interval_Bound(nn.Module):
 				ix = Symbolic_interval(\
 					   torch.clamp(X-self.epsilon, minimum, maximum),\
 					   torch.clamp(X+self.epsilon, minimum, maximum),\
-					   self.use_cuda\
+					   self.use_cuda
 					 )
 			else:
 				input_size = list(X[0].reshape(-1).size())[0]
@@ -577,7 +595,7 @@ class Interval_Bound(nn.Module):
 				
 				X_var = Variable(X, requires_grad=True)
 				loss = nn.CrossEntropyLoss()\
-						(self.net(X_var), y)
+						(self.net[1:](X_var), y)
 				loss.backward()
 				x_grad = X_var.grad.view(-1, input_size)
 				grad_ind = (x_grad.abs().topk(self.proj, dim=1)[1])
@@ -612,6 +630,7 @@ class Interval_Bound(nn.Module):
 					   self.use_cuda\
 					 )
 
+
 		# Propagate symbolic interval through interval networks
 		ix = inet(ix)
 		#print(ix.u)
@@ -642,10 +661,10 @@ def naive_interval_analyze(net, epsilon, X, y,\
 
 	if(parallel):
 		wc = nn.DataParallel(Interval_Bound(net, epsilon,
-				method="naive", use_cuda=use_cuda))(X, y)
+				method="naive", use_cuda=use_cuda, norm=norm))(X, y)
 	else:
 		wc = Interval_Bound(net, epsilon, method="naive",\
-						use_cuda=use_cuda)(X, y)
+						use_cuda=use_cuda, norm=norm)(X, y)
 
 	iloss = nn.CrossEntropyLoss()(wc, y)
 	ierr = (wc.max(1)[1]!=y).type(torch.Tensor)
@@ -672,10 +691,10 @@ def inverse_interval_analyze(net, epsilon, X, y,\
 
 	if(parallel):
 		wc = nn.DataParallel(Interval_Bound(net, epsilon,
-				method="inverse", use_cuda=use_cuda))(X, y)
+				method="inverse", use_cuda=use_cuda, norm=norm))(X, y)
 	else:
 		wc = Interval_Bound(net, epsilon, method="inverse",\
-						use_cuda=use_cuda)(X, y)
+						use_cuda=use_cuda, norm=norm)(X, y)
 
 	iloss = nn.CrossEntropyLoss()(wc, y)
 	ierr = (wc.max(1)[1]!=y).type(torch.Tensor)
@@ -739,13 +758,12 @@ Return:
 '''
 def sym_interval_analyze(net, epsilon, X, y,\
 					use_cuda=True, parallel=False, proj=None, norm="linf"):
-
 	if(parallel):
 		wc = nn.DataParallel(Interval_Bound(net, epsilon,\
-				method="sym", proj=proj, use_cuda=use_cuda))(X, y)
+				method="sym", proj=proj, use_cuda=use_cuda, norm=norm))(X, y)
 	else:
 		wc = Interval_Bound(net, epsilon,\
-				method="sym", proj=proj, use_cuda=use_cuda)(X, y)
+				method="sym", proj=proj, use_cuda=use_cuda, norm=norm)(X, y)
 
 	iloss = nn.CrossEntropyLoss()(wc, y)
 	ierr = (wc.max(1)[1] != y)
