@@ -156,7 +156,7 @@ if __name__ == '__main__':
 
 		print ("eric loss", eric_loss)
 		print ("eric err:", eric_err)
-		print ("eric time per sample:", (time.time()-start))
+		print ("eric time per sample:", (time.time()-start)/X.shape[0])
 		del eric_loss, eric_err
 		print()
 
@@ -199,7 +199,7 @@ if __name__ == '__main__':
 		print ("sym loss:", iloss)
 		print ("sym err:", ierr)
 		print("sym time per sample:",\
-					(time.time()-start))
+					(time.time()-start)/X.shape[0])
 		del iloss, ierr
 		print()
 

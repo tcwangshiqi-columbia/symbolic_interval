@@ -37,12 +37,13 @@ cd symbolic_interval
 python test.py --method sym
 ```
 
-To run and compare with existing methods like ConvexDual, one can run
+To run and compare with existing methods, one can run
 ```
 cd symbolic_interval
 git clone https://github.com/locuslab/convex_adversarial
 python test.py --compare_all
 ```
+Compared to the previously state-of-the-art ConvexDual method, symbolic interval analysis is at least 2 times faster on CPU and GPU end.
 
 ### APIs
 
