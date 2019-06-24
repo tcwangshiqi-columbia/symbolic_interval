@@ -198,7 +198,6 @@ class Symbolic_interval(Interval):
 			self.idep = torch.eye(self.n).unsqueeze(0)
 		self.edep = []
 		self.edep_ind = []
-		self.norm = "Linf"
 		
 		
 

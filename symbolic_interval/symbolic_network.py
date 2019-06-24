@@ -515,6 +515,7 @@ class Interval_Bound(nn.Module):
 				"No such interval methods!"
 		self.method = method
 		self.norm = norm
+		assert self.norm in ["linf", "l2"], "norm" + norm + "not supported"
 			
 
 	def forward(self, X, y):
@@ -594,8 +595,12 @@ class Interval_Bound(nn.Module):
 				# grad ind could be the largest absolute value of gradients
 				
 				X_var = Variable(X, requires_grad=True)
-				loss = nn.CrossEntropyLoss()\
-						(self.net[1:](X_var), y)
+				if self.norm == "l2":
+					loss = nn.CrossEntropyLoss()\
+							(self.net[1:](X_var), y)
+				if self.norm == "linf":
+					loss = nn.CrossEntropyLoss()\
+							(self.net(X_var), y)
 				loss.backward()
 				x_grad = X_var.grad.view(-1, input_size)
 				grad_ind = (x_grad.abs().topk(self.proj, dim=1)[1])

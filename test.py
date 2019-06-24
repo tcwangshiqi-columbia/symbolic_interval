@@ -102,6 +102,7 @@ if __name__ == '__main__':
 	parser.add_argument('--epsilon', type=float, default=0.1)
 	parser.add_argument('--PARALLEL', action='store_true', default=False)
 	parser.add_argument('--compare_all', action='store_true', default=False)
+	parser.add_argument('--norm', type=str, default="linf")
 	args = parser.parse_args()
 
 	use_cuda = torch.cuda.is_available()
@@ -193,7 +194,7 @@ if __name__ == '__main__':
 
 		iloss, ierr = sym_interval_analyze(model, epsilon,\
 						X, y, use_cuda, parallel=PARALLEL,\
-						proj=args.proj)
+						proj=args.proj, norm=args.norm)
 			
 
 		print ("sym loss:", iloss)
