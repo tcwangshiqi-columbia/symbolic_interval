@@ -309,16 +309,12 @@ class Interval_ReLU(nn.Module):
 			return ix
 
 		if(isinstance(ix, Symbolic_interval)):
-			lower = ix.l
-			upper = ix.u
-			#print("sym u", upper)
-			#print("sym l", lower)
-
-			appr_condition = ((lower<0)*(upper>0)).detach()
-			mask = (lower>0).type_as(lower)
-			mask[appr_condition] = upper[appr_condition]/\
-							(upper[appr_condition] -\
-							lower[appr_condition]).detach()
+			lower = ix.l.clamp(max=0)
+			upper = ix.u.clamp(min=0)
+			upper = torch.max(upper, lower + 1e-8)
+			mask = upper / (upper - lower)
+			
+			appr_condition = ((ix.l<0)*(ix.u>0))
 
 			m = int(appr_condition.sum().item())
 
