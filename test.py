@@ -24,7 +24,7 @@ import torchvision.transforms as transforms
 import torchvision.datasets as datasets
 
 from symbolic_interval.symbolic_network import Interval_network
-from symbolic_interval.symbolic_network import sym_interval_analyze
+from symbolic_interval.symbolic_network import sym_interval_analyze, sym_interval_analyze_new
 from symbolic_interval.symbolic_network import naive_interval_analyze
 
 import argparse
@@ -181,6 +181,9 @@ if __name__ == '__main__':
 		iloss, ierr = naive_interval_analyze(model, epsilon,\
 					X, y, use_cuda)
 
+		iloss.backward()
+		print(model[0].weight.grad.sum())
+
 		print ("naive loss:", iloss)
 		print ("naive err:", ierr)
 		print ("naive time per sample:",\
@@ -195,7 +198,9 @@ if __name__ == '__main__':
 		iloss, ierr = sym_interval_analyze(model, epsilon,\
 						X, y, use_cuda, parallel=PARALLEL,\
 						proj=args.proj, norm=args.norm)
-			
+
+		iloss.backward()
+		print(model[0].weight.grad.sum())
 
 		print ("sym loss:", iloss)
 		print ("sym err:", ierr)
@@ -204,6 +209,24 @@ if __name__ == '__main__':
 		del iloss, ierr
 		print()
 
+
+
+		start = time.time()
+
+		model[0].weight.grad.zero_()
+		iloss, ierr = sym_interval_analyze_new(model, epsilon,\
+						X, y, use_cuda, parallel=PARALLEL,\
+						proj=args.proj, norm=args.norm)
+
+		iloss.backward()
+		print(model[0].weight.grad.sum())
+
+		print ("sym loss:", iloss)
+		print ("sym err:", ierr)
+		print("sym time per sample:",\
+					(time.time()-start)/X.shape[0])
+		del iloss, ierr
+		print()
 
 
 
