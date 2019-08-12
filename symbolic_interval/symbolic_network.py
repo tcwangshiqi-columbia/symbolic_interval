@@ -497,27 +497,14 @@ class Interval_ReLU(nn.Module):
 			return ix
 
 		if(isinstance(ix, Interval)):
-			lower = ix.l
-			upper = ix.u
+			'''
+			lower = ix.l.clamp(max=0)
+			upper = ix.u.clamp(min=0)
+			upper = torch.max(upper, lower + 1e-8)
+			mask = upper / (upper - lower)
 
-			#print("naive", upper)
-
-			if(ix.use_cuda):
-				appr_condition = ((lower<0) * (upper>0)).type(\
-					torch.Tensor).cuda(device=ix.c.get_device())
-			else:
-				appr_condition = ((lower<0) * (upper>0)).type(\
-							torch.Tensor)
-
-			mask = appr_condition*((upper)/(upper-lower+0.000001))
-			mask = mask + 1 - appr_condition
-			if(ix.use_cuda):
-				mask = mask*((upper>0).type(torch.Tensor).\
-					cuda(device=ix.c.get_device()))
-			else:
-				mask = mask*(upper>0).type(torch.Tensor)
 			ix.mask.append(mask)
-			#print(ix.e.shape)
+			'''
 			ix.update_lu(F.relu(ix.l), F.relu(ix.u))
 			return ix
 
