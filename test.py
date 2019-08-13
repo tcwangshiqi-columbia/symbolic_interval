@@ -30,7 +30,7 @@ from symbolic_interval.symbolic_network import naive_interval_analyze
 import argparse
 
 import time
-
+import os
 
 '''Flatten layers.
 Please use this Flatten layer to flat the convolutional layers when 
@@ -44,7 +44,9 @@ class Vlayer(nn.Module):
 	def __init__(self, n):
 		super(Vlayer, self).__init__()
 		self.n = n
-		self.w = torch.nn.Parameter(torch.zeros((1,n)))
+		self.w = torch.nn.Parameter(torch.ones((1,n)))
+		#self.w = torch.nn.Parameter(torch.zeros((1,n)).uniform_(0,1))
+		#print(self.w.sum()/self.n, self.w.max(), self.w.min())
 
 	def forward(self, x):
 		return x
@@ -143,7 +145,12 @@ if __name__ == '__main__':
 	parser.add_argument('--PARALLEL', action='store_true', default=False)
 	parser.add_argument('--compare_all', action='store_true', default=False)
 	parser.add_argument('--norm', type=str, default="linf")
+	parser.add_argument('--gpu', type=str, default="0")
+
 	args = parser.parse_args()
+
+	os.environ['CUDA_DEVICE_ORDER'] = 'PCI_BUS_ID'
+	os.environ['CUDA_VISIBLE_DEVICES'] = args.gpu
 
 	use_cuda = torch.cuda.is_available()
 
@@ -254,6 +261,7 @@ if __name__ == '__main__':
 		model_new = mnist_model_new()
 
 		model = transfer_model(model_new, model)
+		if use_cuda: model.cuda()
 
 		#model[0].weight.grad.zero_()
 		iloss, ierr = sym_interval_analyze_new(model, epsilon,\
