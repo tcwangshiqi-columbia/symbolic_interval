@@ -46,7 +46,9 @@ class Interval_network(nn.Module):
 				first_layer = False
 			if 'Flatten' in (str(layer.__class__.__name__)): 
 				self.net.append(Interval_Flatten())
-
+			if 'Vlayer' in (str(layer.__class__.__name__)): 
+				self.net.append(Interval_Vlayer(layer))
+		self.net = nn.Sequential(*self.net)
 	'''Forward intervals for each layer.
 
 	* :attr:`ix` is the input fore each layer. If ix is a naive
@@ -54,11 +56,12 @@ class Interval_network(nn.Module):
 	interval, it will propagate symbolicly.
 	'''
 	def forward(self, ix):
-
+		return self.net(ix)
+		'''
 		for i, layer in enumerate(self.net):
 			ix = layer(ix)
 		return ix
-
+		'''
 
 class Interval_Dense(nn.Module):
 	def __init__(self, layer, first_layer=False):
@@ -93,7 +96,9 @@ class Interval_Dense(nn.Module):
 			#print (ix.c.shape, self.layer.weight.shape)
 			ix.c = F.linear(ix.c, self.layer.weight, bias=self.layer.bias)
 			ix.idep = F.linear(ix.idep, self.layer.weight)
-			ix.edep = F.linear(ix.edep, self.layer.weight.abs())
+			ix.emix = F.linear(ix.emix, self.layer.weight.abs())
+			for i in range(len(ix.edep)):
+				ix.edep[i] = F.linear(ix.edep[i], self.layer.weight)
 			ix.shape = list(ix.c.shape[1:])
 			ix.n = list(ix.c[0].view(-1).size())[0]
 			ix.concretize()
@@ -209,8 +214,12 @@ class Interval_Conv2d(nn.Module):
 			ix.idep = F.conv2d(ix.idep, self.layer.weight, 
 						   stride=self.layer.stride,
 						   padding=self.layer.padding)
+			for i in range(len(ix.edep)):
+				ix.edep[i] = F.conv2d(ix.edep[i], self.layer.weight, 
+						   stride=self.layer.stride,
+						   padding=self.layer.padding)
 
-			ix.edep = F.conv2d(ix.edep, self.layer.weight.abs(), 
+			ix.emix = F.conv2d(ix.emix, self.layer.weight.abs(), 
 						   stride=self.layer.stride,
 						   padding=self.layer.padding)
 			ix.shape = list(ix.c.shape[1:])
@@ -302,6 +311,66 @@ class Interval_Conv2d(nn.Module):
 			return ix
 
 
+class Interval_Vlayer(nn.Module):
+	def __init__(self, layer):
+		nn.Module.__init__(self)
+		self.layer = layer
+
+	def forward(self, ix):
+		if not isinstance(ix, Symbolic_interval_new): return ix
+
+		v = self.layer.w
+		lower = ix.l.clamp(max=0)
+		upper = ix.u.clamp(min=0)
+		
+		upper = torch.max(upper, lower + 1e-8)
+		mask = upper / (upper - lower)
+
+		mask = mask*v
+		appr_err = 0.5*(1-mask)*(ix.u.clamp(min=0)-ix.l.clamp(min=0))
+
+		#appr_condition = (ix.u>0)*(ix.l<0)
+		appr_condition = (((ix.u>0).float()*(ix.l<0).float()*v)>0.5)
+
+		m = (appr_condition>0).sum().item()
+
+		appr_ind = appr_condition.view(-1,ix.n).nonzero()
+
+		if(ix.use_cuda):
+			error_row = torch.zeros((m, ix.n),\
+							device=lower.get_device())
+			#v = torch.ones(lower.shape, device=lower.get_device())
+		else:
+			error_row = torch.zeros((m, ix.n))
+			#v = torch.ones(lower.shape)
+
+		if (m!=0):
+
+			error_row = error_row.scatter_(1,\
+				appr_ind[:,1,None], appr_err[appr_condition][:,None])
+			
+			edep_ind = lower.new(appr_ind.size(0),\
+								lower.size(0)).zero_()
+			edep_ind = edep_ind.scatter_(1, appr_ind[:,0][:,None], 1)
+
+		ix.c = ix.c*mask + 0.5*(1-mask)*(ix.l.clamp(min=0)+ix.u.clamp(min=0))
+
+		for i in range(len(ix.edep)):
+			ix.edep[i] = ix.edep[i] * ix.edep_ind[i].mm(mask)
+
+		ix.idep = ix.idep*mask.view(ix.batch_size, 1, ix.n)
+
+		if(m!=0):
+
+			ix.edep = ix.edep + [error_row]
+			ix.edep_ind = ix.edep_ind + [edep_ind]
+
+		ix.emix = ix.emix*mask+appr_err*(1.-appr_condition.type_as(lower))
+
+		#ix.concretize()
+		#print(ix.l.sum(), ix.u.sum(), ix.c.sum())
+
+		return ix
 
 class Interval_ReLU(nn.Module):
 	def __init__(self, layer):
@@ -337,16 +406,16 @@ class Interval_ReLU(nn.Module):
 			upper = torch.max(upper, lower + 1e-8)
 			mask = upper / (upper - lower)
 			appr_condition = ((ix.l<0)*(ix.u>0))
+
+			#ix.l.retain_grad()
+			#mask[0,0].backward()
+			#print(ix.l.grad)
 			
 			m = int(appr_condition.sum().item())
 
 			appr_ind = appr_condition.view(-1,ix.n).nonzero()
 
 			appr_err = mask*(-lower)/2.0
-			#print(m)
-			#print(ix.u.sum())
-			#print(ix.l.sum())
-			#print()
 
 			if (m!=0):
 
@@ -358,7 +427,7 @@ class Interval_ReLU(nn.Module):
 
 				error_row = error_row.scatter_(1,\
 					appr_ind[:,1,None], appr_err[appr_condition][:,None])
-
+				
 				edep_ind = lower.new(appr_ind.size(0),\
 									lower.size(0)).zero_()
 				edep_ind = edep_ind.scatter_(1, appr_ind[:,0][:,None], 1)
@@ -374,27 +443,9 @@ class Interval_ReLU(nn.Module):
 
 				ix.edep = ix.edep + [error_row]
 				ix.edep_ind = ix.edep_ind + [edep_ind]
-
 			return ix
 		
 		if(isinstance(ix, Symbolic_interval_new)):
-
-			lower = ix.l.clamp(max=0)
-			upper = ix.u.clamp(min=0)
-			upper = torch.max(upper, lower + 1e-8)
-			mask = upper / (upper - lower)
-
-			appr_err = mask*(-lower)/2.0
-			
-			m = (appr_err>0).sum().item()
-			#print(m)
-			#print(ix.u.sum())
-			#print(ix.l.sum())
-			#print()
-
-			ix.c = ix.c*mask+appr_err
-			ix.idep = ix.idep*mask.view(ix.batch_size, 1, ix.n)
-			ix.edep = ix.edep*mask+appr_err
 
 			return ix
 
@@ -497,6 +548,7 @@ class Interval_ReLU(nn.Module):
 			return ix
 
 		if(isinstance(ix, Interval)):
+			
 			'''
 			lower = ix.l.clamp(max=0)
 			upper = ix.u.clamp(min=0)
@@ -556,8 +608,10 @@ class Interval_Bound(nn.Module):
 		# Transfer original model to interval models
 		if self.norm == "linf":
 			inet = Interval_network(self.net)
-			
-
+			'''
+			for p in inet.parameters():
+				print(p.shape)
+			'''
 		if self.norm == "l2":
 			print("Transfer l2 norm to linf norm")
 			inet = Interval_network(self.net[1:])

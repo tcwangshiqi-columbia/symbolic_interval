@@ -40,6 +40,46 @@ class Flatten(nn.Module):
 	def forward(self, x):
 		return x.view(x.size(0), -1)
 
+class Vlayer(nn.Module):
+	def __init__(self, n):
+		super(Vlayer, self).__init__()
+		self.n = n
+		self.w = torch.nn.Parameter(torch.zeros((1,n)))
+
+	def forward(self, x):
+		return x
+
+def mnist_model_new(): 
+	model = nn.Sequential(
+		nn.Conv2d(1, 16, 4, stride=2, padding=1),
+		nn.ReLU(),
+		Vlayer(3136),
+		nn.Conv2d(16, 32, 4, stride=2, padding=1),
+		nn.ReLU(),
+		Vlayer(1568),
+		Flatten(),
+		nn.Linear(32*7*7,100),
+		nn.ReLU(),
+		Vlayer(100),
+		nn.Linear(100, 10)
+	)
+	return model
+
+def transfer_model(model_new, model):
+
+	import copy
+	index = 0
+	for i, layer in enumerate(model_new):
+		#print(layer, isinstance(layer, nn.Linear))
+		if 'Vlayer' in (str(layer.__class__.__name__)): 
+			continue
+		
+		if isinstance(model[index], (nn.Conv2d, nn.Linear)) and\
+					isinstance(layer, (nn.Conv2d, nn.Linear)):
+			model_new[i] = copy.deepcopy(model[index])
+		index += 1
+	return model_new
+
 
 '''Test MNIST models.
 Please use nn.Sequential to build the models.
@@ -193,6 +233,7 @@ if __name__ == '__main__':
 		
 
 	if args.method == "sym" or args.compare_all:	
+		'''
 		start = time.time()
 
 		iloss, ierr = sym_interval_analyze(model, epsilon,\
@@ -200,7 +241,6 @@ if __name__ == '__main__':
 						proj=args.proj, norm=args.norm)
 
 		iloss.backward()
-		print(model[0].weight.grad.sum())
 
 		print ("sym loss:", iloss)
 		print ("sym err:", ierr)
@@ -208,12 +248,14 @@ if __name__ == '__main__':
 					(time.time()-start)/X.shape[0])
 		del iloss, ierr
 		print()
-
-
+		'''
 
 		start = time.time()
+		model_new = mnist_model_new()
 
-		model[0].weight.grad.zero_()
+		model = transfer_model(model_new, model)
+
+		#model[0].weight.grad.zero_()
 		iloss, ierr = sym_interval_analyze_new(model, epsilon,\
 						X, y, use_cuda, parallel=PARALLEL,\
 						proj=args.proj, norm=args.norm)
@@ -227,7 +269,7 @@ if __name__ == '__main__':
 					(time.time()-start)/X.shape[0])
 		del iloss, ierr
 		print()
-
+		
 
 
 

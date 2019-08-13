@@ -296,11 +296,16 @@ class Symbolic_interval_new(Interval):
 		if(self.use_cuda):
 			self.idep = torch.eye(self.n, device=\
 					self.c.get_device()).unsqueeze(0)
-			self.edep = torch.zeros(self.c.shape, device=self.c.get_device())
+			self.emix = torch.zeros(self.c.shape, device=self.c.get_device())
+			#self.emix = self.e
 		else:
 			self.idep = torch.eye(self.n).unsqueeze(0)
-			self.edep = torch.zeros(self.c.shape)
-
+			self.emix = torch.zeros(self.c.shape)
+			#self.emix = self.e
+		self.edep = []
+		self.edep_ind = []
+		
+		
 
 	'''Calculating the upper and lower matrix for symbolic intervals.
 	To make concretize easier, convolutional layer nodes will be 
@@ -308,14 +313,25 @@ class Symbolic_interval_new(Interval):
 	'''
 	def concretize(self):
 		self.extend()
+		
+		if(self.edep):
 
-		e = (self.idep*self.e.view(self.batch_size,\
-				self.input_size, 1)).abs().sum(dim=1)
-		e = e + self.edep
+			e = (self.idep*self.e.view(self.batch_size,\
+					self.input_size, 1)).abs().sum(dim=1)
+			#print("sym e1", e)
+			for i in range(len(self.edep)):
+				e = e + self.edep_ind[i].t().mm(self.edep[i].abs())
+			#print("sym e2", e)
 
+		else:
+			e = (self.idep*self.e.view(self.batch_size,\
+					self.input_size, 1)).abs().sum(dim=1)
+			#print("sym e1", e)
+		
+		#print(self.emix.sum(), e.sum())
+		e = e + self.emix
 		self.l = self.c - e
 		self.u = self.c + e
-		#print(self.u)
 
 		return self
 
@@ -325,7 +341,10 @@ class Symbolic_interval_new(Interval):
 	def extend(self):
 		self.c = self.c.reshape(self.batch_size, self.n)
 		self.idep = self.idep.reshape(-1, self.input_size, self.n)
-		self.edep = self.edep.reshape(-1, self.n)
+
+		for i in range(len(self.edep)):
+			self.edep[i] = self.edep[i].reshape(-1, self.n)
+		self.emix = self.emix.reshape(-1, self.n)
 
 
 	'''Convert the extended layer back to the shape stored in `shape`.
@@ -333,7 +352,11 @@ class Symbolic_interval_new(Interval):
 	def shrink(self):
 		self.c = self.c.reshape(tuple([-1]+self.shape))
 		self.idep = self.idep.reshape(tuple([-1]+self.shape))
-		self.edep = self.edep.reshape(tuple([-1]+self.shape))
+
+		for i in range(len(self.edep)):
+			self.edep[i] = self.edep[i].reshape(\
+				tuple([-1]+self.shape))
+		self.emix = self.emix.reshape(tuple([-1]+self.shape))
 
 
 	'''Calculate the wrost case of the analyzed output ranges.
@@ -346,13 +369,6 @@ class Symbolic_interval_new(Interval):
 
 		assert y.shape[0] == self.l.shape[0] == self.batch_size,\
 								"wrong label shape"
-		self.concretize()
-		for i in range(y.shape[0]):
-			t = self.l[i, y[i]]
-			self.u[i] = self.u[i]-t
-			self.u[i, y[i]] = 0.0
-		return self.u
-		'''
 		if(self.use_cuda):
 			kk = torch.eye(output_size, dtype=torch.uint8,\
 				requires_grad=False, device=y.get_device())[y]
@@ -368,18 +384,24 @@ class Symbolic_interval_new(Interval):
 					view(self.batch_size, self.input_size,1)
 		self.idep = self.idep-idep_t
 
+		for i in range(len(self.edep)):
+			edep_t = self.edep[i].masked_select((self.edep_ind[i].\
+						mm(kk.type_as(self.edep_ind[i]))).type_as(kk)).\
+						view(-1,1)
+			self.edep[i] = self.edep[i]-edep_t
 
 		for i in range(y.shape[0]):
-			t = self.edep[i, y[i]]
-			self.edep[i] = self.u[i]+t
-			self.edep[i, y[i]] = 0
+			t = self.emix[i, y[i]]
+			self.emix[i] = self.emix[i]+t
+			self.emix[i, y[i]] = 0.0
 
-		#edep_t = self.edep.masked_select(kk).unsqueeze(1)
-		#self.edep = self.edep + edep_t
 		self.concretize()
-		
+
 		return self.u 
-		'''
+
+
+
+
 
 
 class Center_symbolic_interval(Interval):
