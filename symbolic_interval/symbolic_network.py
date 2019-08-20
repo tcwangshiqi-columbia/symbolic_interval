@@ -21,7 +21,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.autograd import Variable
 
-from .interval import Interval, Symbolic_interval, Inverse_interval, Center_symbolic_interval, Symbolic_interval_new
+from .interval import Interval, Symbolic_interval, Inverse_interval, Center_symbolic_interval
 from .interval import Symbolic_interval_proj1, Symbolic_interval_proj2
 import time
 
@@ -85,18 +85,6 @@ class Interval_Dense(nn.Module):
 			#print (ix.c.shape, self.layer.weight.shape)
 			ix.c = F.linear(ix.c, self.layer.weight, bias=self.layer.bias)
 			ix.idep = F.linear(ix.idep, self.layer.weight)
-			for i in range(len(ix.edep)):
-				ix.edep[i] = F.linear(ix.edep[i], self.layer.weight)
-			ix.shape = list(ix.c.shape[1:])
-			ix.n = list(ix.c[0].view(-1).size())[0]
-			ix.concretize()
-			return ix
-
-		if(isinstance(ix, Symbolic_interval_new)):
-			#print (ix.c.shape, self.layer.weight.shape)
-			ix.c = F.linear(ix.c, self.layer.weight, bias=self.layer.bias)
-			ix.idep = F.linear(ix.idep, self.layer.weight)
-			ix.emix = F.linear(ix.emix, self.layer.weight.abs())
 			for i in range(len(ix.edep)):
 				ix.edep[i] = F.linear(ix.edep[i], self.layer.weight)
 			ix.shape = list(ix.c.shape[1:])
@@ -205,27 +193,6 @@ class Interval_Conv2d(nn.Module):
 			ix.concretize()
 			return ix
 
-		if(isinstance(ix, Symbolic_interval_new)):
-			ix.shrink()
-			ix.c = F.conv2d(ix.c, self.layer.weight, 
-						   stride=self.layer.stride,
-						   padding=self.layer.padding, 
-						   bias=self.layer.bias)
-			ix.idep = F.conv2d(ix.idep, self.layer.weight, 
-						   stride=self.layer.stride,
-						   padding=self.layer.padding)
-			for i in range(len(ix.edep)):
-				ix.edep[i] = F.conv2d(ix.edep[i], self.layer.weight, 
-						   stride=self.layer.stride,
-						   padding=self.layer.padding)
-
-			ix.emix = F.conv2d(ix.emix, self.layer.weight.abs(), 
-						   stride=self.layer.stride,
-						   padding=self.layer.padding)
-			ix.shape = list(ix.c.shape[1:])
-			ix.n = list(ix.c[0].reshape(-1).size())[0]
-			ix.concretize()
-			return ix
 
 		if(isinstance(ix, Symbolic_interval_proj1)):
 			#print(ix.idep.shape)
@@ -311,67 +278,6 @@ class Interval_Conv2d(nn.Module):
 			return ix
 
 
-class Interval_Vlayer(nn.Module):
-	def __init__(self, layer):
-		nn.Module.__init__(self)
-		self.layer = layer
-
-	def forward(self, ix):
-		if not isinstance(ix, Symbolic_interval_new): return ix
-
-		v = self.layer.w
-		lower = ix.l.clamp(max=0)
-		upper = ix.u.clamp(min=0)
-		
-		upper = torch.max(upper, lower + 1e-8)
-		mask = upper / (upper - lower)
-
-		mask = mask*v
-		appr_err = 0.5*(1-mask)*(ix.u.clamp(min=0)-ix.l.clamp(min=0))
-
-		#appr_condition = (ix.u>0)*(ix.l<0)
-		appr_condition = (((ix.u>0).float()*(ix.l<0).float()*v)>0.5)
-
-		m = (appr_condition>0).sum().item()
-
-		appr_ind = appr_condition.view(-1,ix.n).nonzero()
-
-		if(ix.use_cuda):
-			error_row = torch.zeros((m, ix.n),\
-							device=lower.get_device())
-			#v = torch.ones(lower.shape, device=lower.get_device())
-		else:
-			error_row = torch.zeros((m, ix.n))
-			#v = torch.ones(lower.shape)
-
-		if (m!=0):
-
-			error_row = error_row.scatter_(1,\
-				appr_ind[:,1,None], appr_err[appr_condition][:,None])
-			
-			edep_ind = lower.new(appr_ind.size(0),\
-								lower.size(0)).zero_()
-			edep_ind = edep_ind.scatter_(1, appr_ind[:,0][:,None], 1)
-
-		ix.c = ix.c*mask + 0.5*(1-mask)*(ix.l.clamp(min=0)+ix.u.clamp(min=0))
-
-		for i in range(len(ix.edep)):
-			ix.edep[i] = ix.edep[i] * ix.edep_ind[i].mm(mask)
-
-		ix.idep = ix.idep*mask.view(ix.batch_size, 1, ix.n)
-
-		if(m!=0):
-
-			ix.edep = ix.edep + [error_row]
-			ix.edep_ind = ix.edep_ind + [edep_ind]
-
-		ix.emix = ix.emix*mask+appr_err*(1.-appr_condition.type_as(lower))
-
-		#ix.concretize()
-		#print(ix.l.sum(), ix.u.sum(), ix.c.sum())
-
-		return ix
-
 class Interval_ReLU(nn.Module):
 	def __init__(self, layer):
 		nn.Module.__init__(self)
@@ -445,10 +351,6 @@ class Interval_ReLU(nn.Module):
 				ix.edep_ind = ix.edep_ind + [edep_ind]
 			return ix
 		
-		if(isinstance(ix, Symbolic_interval_new)):
-
-			return ix
-
 
 		if(isinstance(ix, Symbolic_interval_proj1)):
 			lower = ix.l
@@ -569,8 +471,7 @@ class Interval_Flatten(nn.Module):
 		if(isinstance(ix, Symbolic_interval) or\
 				isinstance(ix, Symbolic_interval_proj1) or\
 				isinstance(ix, Symbolic_interval_proj2) or\
-				isinstance(ix, Center_symbolic_interval) or\
-				isinstance(ix, Symbolic_interval_new)):
+				isinstance(ix, Center_symbolic_interval)):
 			ix.extend()
 			return ix
 		if(isinstance(ix, Interval) or \
@@ -640,13 +541,6 @@ class Interval_Bound(nn.Module):
 			 	)
 		if(self.method == "center_sym"):
 			ix = Center_symbolic_interval(\
-					torch.clamp(X-self.epsilon, minimum, maximum),\
-					torch.clamp(X+self.epsilon, minimum, maximum),\
-					self.use_cuda\
-				)
-
-		if(self.method == "new"):
-			ix = Symbolic_interval_new(\
 					torch.clamp(X-self.epsilon, minimum, maximum),\
 					torch.clamp(X+self.epsilon, minimum, maximum),\
 					self.use_cuda\
@@ -868,21 +762,5 @@ def sym_interval_analyze(net, epsilon, X, y,\
 	
 	return iloss, ierr
 
-
-
-def sym_interval_analyze_new(net, epsilon, X, y,\
-					use_cuda=True, parallel=False, proj=None, norm="linf"):
-	if(parallel):
-		wc = nn.DataParallel(Interval_Bound(net, epsilon,\
-				method="new", proj=proj, use_cuda=use_cuda, norm=norm))(X, y)
-	else:
-		wc = Interval_Bound(net, epsilon,\
-				method="new", proj=proj, use_cuda=use_cuda, norm=norm)(X, y)
-
-	iloss = nn.CrossEntropyLoss()(wc, y)
-	ierr = (wc.max(1)[1] != y)
-	ierr = ierr.sum().item()/X.size(0)
-	
-	return iloss, ierr
 
 
