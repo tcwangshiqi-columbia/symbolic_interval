@@ -499,7 +499,7 @@ class Interval_Bound(nn.Module):
 				"No such interval methods!"
 		self.method = method
 		self.norm = norm
-		assert self.norm in ["linf", "l2"], "norm" + norm + "not supported"
+		assert self.norm in ["linf", "l2", "l1"], "norm" + norm + "not supported"
 			
 
 	def forward(self, X, y):
@@ -507,14 +507,7 @@ class Interval_Bound(nn.Module):
 		out_features = self.net[-1].out_features
 
 		# Transfer original model to interval models
-		if self.norm == "linf":
-			inet = Interval_network(self.net)
-			'''
-			for p in inet.parameters():
-				print(p.shape)
-			'''
-		elif self.norm == "l2":
-			inet = Interval_network(self.net)
+		inet = Interval_network(self.net)
 		'''
 		if self.norm == "l2":
 			print("Transfer l2 norm to linf norm")
@@ -568,6 +561,11 @@ class Interval_Bound(nn.Module):
 				elif self.norm == "l2":
 					ix = Symbolic_interval(\
 					   X, X, self.epsilon, norm="l2",
+					   use_cuda=self.use_cuda
+					 )
+				elif self.norm == "l1":
+					ix = Symbolic_interval(\
+					   X, X, self.epsilon, norm="l1",
 					   use_cuda=self.use_cuda
 					 )
 			else:

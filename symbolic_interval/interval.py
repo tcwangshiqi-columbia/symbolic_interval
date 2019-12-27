@@ -206,27 +206,26 @@ class Symbolic_interval(Interval):
 	def concretize(self):
 		self.extend()
 		if self.norm=="linf":
-			if(self.edep):
 
-				e = (self.idep*self.e.view(self.batch_size,\
-						self.input_size, 1)).abs().sum(dim=1)
-				#print("sym e1", e)
-				for i in range(len(self.edep)):
-					e = e + self.edep_ind[i].t().mm(self.edep[i].abs())
-				#print("sym e2", e)
+			e = (self.idep*self.e.view(self.batch_size,\
+					self.input_size, 1)).abs().sum(dim=1)
 
-			else:
-				e = (self.idep*self.e.view(self.batch_size,\
-						self.input_size, 1)).abs().sum(dim=1)
-				#print("sym e1", e)
 		elif self.norm == "l2":
 			idep = (self.idep*self.idep)\
 						.sum(dim=1, keepdim=False).sqrt()
 
 			e = idep*self.epsilon
 
+		elif self.norm == "l1":
+			idep = self.idep.abs().max(dim=1, keepdim=False)[0]
+
+			e = idep*self.epsilon
+
+		if self.edep:
+			#print("sym e1", e)
 			for i in range(len(self.edep)):
 				e = e + self.edep_ind[i].t().mm(self.edep[i].abs())
+			#print("sym e2", e)
 
 		self.l = self.c - e
 		self.u = self.c + e

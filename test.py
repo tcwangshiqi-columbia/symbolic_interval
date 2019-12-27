@@ -259,11 +259,11 @@ if __name__ == '__main__':
 					  clip_min=X.min(), clip_max=X.max()
 					  )
 		adv_out = model(adv_x)
-
+		print(adv_out)
 		pgd_loss = torch.nn.CrossEntropyLoss()(adv_out, y)
 
 		pgd_err = (adv_out.max(1)[1]!=y).sum().item()/y.shape[0]
-		
+
 		print ("pgd loss:", pgd_loss)
 		print ("pgd err:", pgd_err)
 		print ("pgd time per sample:",\
