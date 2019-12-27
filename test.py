@@ -27,6 +27,8 @@ from symbolic_interval.symbolic_network import Interval_network
 from symbolic_interval.symbolic_network import sym_interval_analyze
 from symbolic_interval.symbolic_network import naive_interval_analyze
 
+from utils_attacks import perturb_iterative
+
 import argparse
 
 import time
@@ -185,14 +187,14 @@ if __name__ == '__main__':
 
 	if args.method=="convexdual" or args.compare_all:
 		from convex_adversarial import robust_loss
-		'''
-		if(PARALLEL):
-			# The first run with parallel will take a few seconds
-			# to warm up.
-			eric_loss, eric_err = robust_loss(model,\
-						 epsilon, X, y, parallel=PARALLEL)
-			del eric_loss, eric_err
-		'''
+		
+		# if(PARALLEL):
+		# 	# The first run with parallel will take a few seconds
+		# 	# to warm up.
+		# 	eric_loss, eric_err = robust_loss(model,\
+		# 				 epsilon, X, y, parallel=PARALLEL)
+		# 	del eric_loss, eric_err
+
 			
 		start = time.time()
 		eric_loss, eric_err = robust_loss(model,\
@@ -236,6 +238,37 @@ if __name__ == '__main__':
 		print ("naive time per sample:",\
 					(time.time()-start)/X.shape[0])
 		del iloss, ierr
+		print()
+
+
+	if args.method == "pgd" or args.compare_all:
+		start = time.time()
+		attack_iter = 20
+		eps_step = args.epsilon/3.
+
+		if args.norm == "linf":
+			madry_ord = np.inf
+		elif args.norm == "l2":
+			madry_ord = 2
+		elif args.norm == "l1":
+			madry_ord = 1
+
+		adv_x = perturb_iterative(X, y, model, attack_iter,\
+					args.epsilon, eps_step, torch.nn.CrossEntropyLoss(),
+					  delta_init=None, ord=madry_ord,
+					  clip_min=X.min(), clip_max=X.max()
+					  )
+		adv_out = model(adv_x)
+
+		pgd_loss = torch.nn.CrossEntropyLoss()(adv_out, y)
+
+		pgd_err = (adv_out.max(1)[1]!=y).sum().item()/y.shape[0]
+		
+		print ("pgd loss:", pgd_loss)
+		print ("pgd err:", pgd_err)
+		print ("pgd time per sample:",\
+					(time.time()-start)/X.shape[0])
+		del pgd_loss, pgd_err
 		print()
 		
 

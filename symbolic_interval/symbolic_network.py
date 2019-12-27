@@ -513,6 +513,9 @@ class Interval_Bound(nn.Module):
 			for p in inet.parameters():
 				print(p.shape)
 			'''
+		elif self.norm == "l2":
+			inet = Interval_network(self.net)
+		'''
 		if self.norm == "l2":
 			print("Transfer l2 norm to linf norm")
 			inet = Interval_network(self.net[1:])
@@ -523,7 +526,7 @@ class Interval_Bound(nn.Module):
 							.sum(dim=1, keepdim=False)\
 							.sqrt() * self.epsilon
 			self.epsilon = self.epsilon.unsqueeze(dim=0).unsqueeze(dim=2).unsqueeze(dim=3)
-
+		'''
 		
 		minimum = X.min().item()
 		maximum = X.max().item()
@@ -556,10 +559,16 @@ class Interval_Bound(nn.Module):
 			# dependency (proj=0) which is the same as naive interval 
 			# propagation.
 			if(self.proj is None):
-				ix = Symbolic_interval(\
+				if self.norm == "linf":
+					ix = Symbolic_interval(\
 					   torch.clamp(X-self.epsilon, minimum, maximum),\
 					   torch.clamp(X+self.epsilon, minimum, maximum),\
-					   self.use_cuda
+					   use_cuda=self.use_cuda
+					 )
+				elif self.norm == "l2":
+					ix = Symbolic_interval(\
+					   X, X, self.epsilon, norm="l2",
+					   use_cuda=self.use_cuda
 					 )
 			else:
 				input_size = list(X[0].reshape(-1).size())[0]
@@ -624,8 +633,8 @@ class Interval_Bound(nn.Module):
 
 		# Propagate symbolic interval through interval networks
 		ix = inet(ix)
-		#print(ix.u)
-		#print(ix.l)
+		print(ix.u)
+		print(ix.l)
 
 		# Calculate the worst case outputs
 		wc = ix.worst_case(y, out_features)

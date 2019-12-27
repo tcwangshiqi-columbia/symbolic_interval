@@ -177,7 +177,7 @@ class Symbolic_interval(Interval):
 	* :attr:`edep` keeps the error dependency introduced by each
 	  overestimated nodes.
 	'''
-	def __init__(self, lower, upper, use_cuda=False):
+	def __init__(self, lower, upper, epsilon=0, norm="linf", use_cuda=False):
 		assert lower.shape[0]==upper.shape[0], "each symbolic"+\
 					"should have the same shape"
 		
@@ -187,6 +187,8 @@ class Symbolic_interval(Interval):
 		self.n = list(self.c[0].reshape(-1).size())[0]
 		self.input_size = self.n
 		self.batch_size = self.c.shape[0]
+		self.epsilon = epsilon
+		self.norm = norm
 		if(self.use_cuda):
 			self.idep = torch.eye(self.n, device=\
 					self.c.get_device()).unsqueeze(0)
@@ -203,19 +205,28 @@ class Symbolic_interval(Interval):
 	'''
 	def concretize(self):
 		self.extend()
-		if(self.edep):
+		if self.norm=="linf":
+			if(self.edep):
 
-			e = (self.idep*self.e.view(self.batch_size,\
-					self.input_size, 1)).abs().sum(dim=1)
-			#print("sym e1", e)
+				e = (self.idep*self.e.view(self.batch_size,\
+						self.input_size, 1)).abs().sum(dim=1)
+				#print("sym e1", e)
+				for i in range(len(self.edep)):
+					e = e + self.edep_ind[i].t().mm(self.edep[i].abs())
+				#print("sym e2", e)
+
+			else:
+				e = (self.idep*self.e.view(self.batch_size,\
+						self.input_size, 1)).abs().sum(dim=1)
+				#print("sym e1", e)
+		elif self.norm == "l2":
+			idep = (self.idep*self.idep)\
+						.sum(dim=1, keepdim=False).sqrt()
+
+			e = idep*self.epsilon
+
 			for i in range(len(self.edep)):
 				e = e + self.edep_ind[i].t().mm(self.edep[i].abs())
-			#print("sym e2", e)
-
-		else:
-			e = (self.idep*self.e.view(self.batch_size,\
-					self.input_size, 1)).abs().sum(dim=1)
-			#print("sym e1", e)
 
 		self.l = self.c - e
 		self.u = self.c + e
