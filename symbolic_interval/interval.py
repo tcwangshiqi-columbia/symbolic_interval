@@ -211,8 +211,7 @@ class Symbolic_interval(Interval):
 					self.input_size, 1)).abs().sum(dim=1)
 
 		elif self.norm == "l2":
-			idep = (self.idep*self.idep)\
-						.sum(dim=1, keepdim=False).sqrt()
+			idep = torch.norm(self.idep, dim=1, keepdim=False)
 
 			e = idep*self.epsilon
 

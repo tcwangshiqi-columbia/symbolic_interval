@@ -631,8 +631,8 @@ class Interval_Bound(nn.Module):
 
 		# Propagate symbolic interval through interval networks
 		ix = inet(ix)
-		print(ix.u)
-		print(ix.l)
+		# print(ix.u[:2])
+		# print(ix.l[:2])
 
 		# Calculate the worst case outputs
 		wc = ix.worst_case(y, out_features)
