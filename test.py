@@ -25,9 +25,13 @@ import torchvision.datasets as datasets
 
 from symbolic_interval.symbolic_network import Interval_network
 from symbolic_interval.symbolic_network import sym_interval_analyze
+from symbolic_interval.symbolic_network import gen_interval_analyze
+from symbolic_interval.symbolic_network import mix_interval_analyze
 from symbolic_interval.symbolic_network import naive_interval_analyze
 
 from utils_attacks import perturb_iterative
+
+from bound_layers import BoundSequential, BoundLinear, BoundConv2d, BoundDataParallel, Flatten
 
 import argparse
 
@@ -38,9 +42,9 @@ import os
 Please use this Flatten layer to flat the convolutional layers when 
 design your own models.
 '''
-class Flatten(nn.Module):
-	def forward(self, x):
-		return x.view(x.size(0), -1)
+# class Flatten(nn.Module):
+# 	def forward(self, x):
+# 		return x.view(x.size(0), -1)
 
 class Vlayer(nn.Module):
 	def __init__(self, n):
@@ -210,6 +214,42 @@ if __name__ == '__main__':
 		del eric_loss, eric_err
 		print()
 
+	if args.method == "crown" or args.compare_all:
+		start = time.time()
+		num_class = 10
+		model = BoundSequential.convert(model,\
+				{'same-slope': False, 'zero-lb': False, 'one-lb': False})
+		c = torch.eye(num_class).type_as(X)[y].unsqueeze(1) -\
+				torch.eye(num_class).type_as(X).unsqueeze(0) 
+		I = (~(y.data.unsqueeze(1) ==\
+					torch.arange(num_class).type_as(y.data).unsqueeze(0)))
+		c = (c[I].view(X.size(0),num_class-1,num_class))
+
+		data_ub = torch.clamp(X + epsilon, max=X.max())
+		data_lb = torch.clamp(X - epsilon, min=X.min())
+		ub, lb, relu_activity, unstable, dead, alive =\
+						model(norm=np.inf, x_U=data_ub, x_L=data_lb, eps=epsilon,\
+						C=c, method_opt="interval_range")
+
+		sa = np.zeros((num_class, num_class - 1), dtype = np.int32)
+		for i in range(sa.shape[0]):
+			for j in range(sa.shape[1]):
+				if j < i:
+					sa[i][j] = j
+				else:
+					sa[i][j] = j + 1
+		sa = torch.LongTensor(sa)
+		lb_s = torch.zeros(X.size(0), num_class)
+		sa_labels = sa[y]
+		lb = lb_s.scatter(1, sa_labels, lb)
+		# print(-lb)
+		robust_ce = nn.CrossEntropyLoss()(-lb, y)
+
+		print ("crown loss", robust_ce)
+		print ("crown time per sample:", (time.time()-start)/X.shape[0])
+		del robust_ce
+		print()
+
 	if args.method=="baseline" or args.compare_all:
 
 		
@@ -286,6 +326,41 @@ if __name__ == '__main__':
 		print ("sym loss:", iloss)
 		print ("sym err:", ierr)
 		print("sym time per sample:",\
+					(time.time()-start)/X.shape[0])
+		del iloss, ierr
+		print()
+
+	if args.method == "gen" or args.compare_all:	
+		
+		start = time.time()
+
+		iloss, ierr = gen_interval_analyze(model, [epsilon, epsilon],\
+						X, y, use_cuda, parallel=PARALLEL,\
+						proj=args.proj, norm=["l2", "l1"])
+
+		#iloss.backward()
+		#print(model[0].weight.grad.sum())
+
+		print ("sym loss:", iloss)
+		print ("sym err:", ierr)
+		print("sym time per sample:",\
+					(time.time()-start)/X.shape[0])
+		del iloss, ierr
+		print()
+
+	if args.method == "mix" or args.compare_all:
+		start = time.time()
+
+		iloss, ierr = mix_interval_analyze(model, epsilon,\
+						X, y, use_cuda, parallel=PARALLEL,\
+						proj=args.proj, norm=args.norm)
+
+		#iloss.backward()
+		#print(model[0].weight.grad.sum())
+
+		print ("mix loss:", iloss)
+		print ("mix err:", ierr)
+		print("mix time per sample:",\
 					(time.time()-start)/X.shape[0])
 		del iloss, ierr
 		print()
