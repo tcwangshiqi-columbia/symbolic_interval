@@ -29,7 +29,7 @@ from symbolic_interval.symbolic_network import gen_interval_analyze
 from symbolic_interval.symbolic_network import mix_interval_analyze
 from symbolic_interval.symbolic_network import naive_interval_analyze
 
-from utils_attacks import perturb_iterative
+# from utils_attacks import perturb_iterative
 
 from bound_layers import BoundSequential, BoundLinear, BoundConv2d, BoundDataParallel, Flatten
 
@@ -188,7 +188,7 @@ if __name__ == '__main__':
 			model.cuda()
 		break
 
-
+	'''
 	if args.method=="convexdual" or args.compare_all:
 		from convex_adversarial import robust_loss
 		
@@ -213,6 +213,8 @@ if __name__ == '__main__':
 		print ("eric time per sample:", (time.time()-start)/X.shape[0])
 		del eric_loss, eric_err
 		print()
+	'''
+
 
 	if args.method == "crown" or args.compare_all:
 		start = time.time()
@@ -227,9 +229,15 @@ if __name__ == '__main__':
 
 		data_ub = torch.clamp(X + epsilon, max=X.max())
 		data_lb = torch.clamp(X - epsilon, min=X.min())
-		ub, lb, relu_activity, unstable, dead, alive =\
-						model(norm=np.inf, x_U=data_ub, x_L=data_lb, eps=epsilon,\
-						C=c, method_opt="interval_range")
+
+		output = model(X, method_opt="forward")
+
+		# ub, lb, relu_activity, unstable, dead, alive =\
+		# 				model(norm=np.inf, x_U=data_ub, x_L=data_lb, eps=epsilon,\
+		# 				C=c, method_opt="interval_range")
+		ub, _, lb, _ =\
+						model(norm=np.inf, x_U=data_ub, x_L=data_lb, eps=epsilon,
+						C=c, upper=False, lower=True, method_opt="full_backward_range")
 
 		sa = np.zeros((num_class, num_class - 1), dtype = np.int32)
 		for i in range(sa.shape[0]):
@@ -245,10 +253,17 @@ if __name__ == '__main__':
 		# print(-lb)
 		robust_ce = nn.CrossEntropyLoss()(-lb, y)
 
-		print ("crown loss", robust_ce)
+		print ("crown loss", robust_ce.item())
 		print ("crown time per sample:", (time.time()-start)/X.shape[0])
 		del robust_ce
 		print()
+
+		model = mnist_model()
+		if use_cuda:
+			model.load_state_dict(torch.load(MODEL_NAME))
+			model = model.cuda()
+		else:
+			model.load_state_dict(torch.load(MODEL_NAME, map_location={'cuda:0': 'cpu'}))
 
 	if args.method=="baseline" or args.compare_all:
 
@@ -279,37 +294,6 @@ if __name__ == '__main__':
 					(time.time()-start)/X.shape[0])
 		del iloss, ierr
 		print()
-
-
-	if args.method == "pgd" or args.compare_all:
-		start = time.time()
-		attack_iter = 20
-		eps_step = args.epsilon/3.
-
-		if args.norm == "linf":
-			madry_ord = np.inf
-		elif args.norm == "l2":
-			madry_ord = 2
-		elif args.norm == "l1":
-			madry_ord = 1
-
-		adv_x = perturb_iterative(X, y, model, attack_iter,\
-					args.epsilon, eps_step, torch.nn.CrossEntropyLoss(),
-					  delta_init=None, ord=madry_ord,
-					  clip_min=X.min(), clip_max=X.max()
-					  )
-		adv_out = model(adv_x)
-		# print(adv_out)
-		pgd_loss = torch.nn.CrossEntropyLoss()(adv_out, y)
-
-		pgd_err = (adv_out.max(1)[1]!=y).sum().item()/y.shape[0]
-
-		print ("pgd loss:", pgd_loss)
-		print ("pgd err:", pgd_err)
-		print ("pgd time per sample:",\
-					(time.time()-start)/X.shape[0])
-		del pgd_loss, pgd_err
-		print()
 		
 
 	if args.method == "sym" or args.compare_all:	
@@ -323,13 +307,14 @@ if __name__ == '__main__':
 		#iloss.backward()
 		#print(model[0].weight.grad.sum())
 
-		print ("sym loss:", iloss)
+		print ("sym loss:", iloss.item())
 		print ("sym err:", ierr)
 		print("sym time per sample:",\
 					(time.time()-start)/X.shape[0])
 		del iloss, ierr
 		print()
 
+	'''
 	if args.method == "gen" or args.compare_all:	
 		
 		start = time.time()
@@ -347,7 +332,9 @@ if __name__ == '__main__':
 					(time.time()-start)/X.shape[0])
 		del iloss, ierr
 		print()
+	'''
 
+	'''
 	if args.method == "mix" or args.compare_all:
 		start = time.time()
 
@@ -364,6 +351,6 @@ if __name__ == '__main__':
 					(time.time()-start)/X.shape[0])
 		del iloss, ierr
 		print()
-		
+	'''
 
 

@@ -266,10 +266,10 @@ class Symbolic_interval(Interval):
 		assert y.shape[0] == self.l.shape[0] == self.batch_size,\
 								"wrong label shape"
 		if(self.use_cuda):
-			kk = torch.eye(output_size, dtype=torch.uint8,\
+			kk = torch.eye(output_size, dtype=torch.bool,\
 				requires_grad=False, device=y.get_device())[y]
 		else:
-			kk = torch.eye(output_size, dtype=torch.uint8,\
+			kk = torch.eye(output_size, dtype=torch.bool,\
 					requires_grad=False)[y]
 
 		c_t = self.c.masked_select(kk).unsqueeze(1)
@@ -398,10 +398,10 @@ class mix_interval(Symbolic_interval):
 		assert y.shape[0] == self.l.shape[0] == self.batch_size,\
 								"wrong label shape"
 		if(self.use_cuda):
-			kk = torch.eye(output_size, dtype=torch.uint8,\
+			kk = torch.eye(output_size, dtype=torch.bool,\
 				requires_grad=False, device=y.get_device())[y]
 		else:
-			kk = torch.eye(output_size, dtype=torch.uint8,\
+			kk = torch.eye(output_size, dtype=torch.bool,\
 					requires_grad=False)[y]
 
 		c_t = self.c.masked_select(kk).unsqueeze(1)
@@ -483,10 +483,10 @@ class Center_symbolic_interval(Interval):
 		assert y.shape[0] == self.l.shape[0] == self.batch_size,\
 								"wrong label shape"
 		if(self.use_cuda):
-			kk = torch.eye(output_size, dtype=torch.uint8,\
+			kk = torch.eye(output_size, dtype=torch.bool,\
 				requires_grad=False, device=y.get_device())[y]
 		else:
-			kk = torch.eye(output_size, dtype=torch.uint8,\
+			kk = torch.eye(output_size, dtype=torch.bool,\
 					requires_grad=False)[y]
 
 		c_t = self.c.masked_select(kk).unsqueeze(1)
@@ -625,10 +625,10 @@ class Symbolic_interval_proj1(Interval):
 		assert y.shape[0] == self.l.shape[0] == self.batch_size,\
 								"wrong label shape"
 		if(self.use_cuda):
-			kk = torch.eye(output_size, dtype=torch.uint8,\
+			kk = torch.eye(output_size, dtype=torch.bool,\
 				requires_grad=False, device=y.get_device())[y]
 		else:
-			kk = torch.eye(output_size, dtype=torch.uint8,\
+			kk = torch.eye(output_size, dtype=torch.bool,\
 					requires_grad=False)[y]
 
 		c_t = self.c.masked_select(kk).unsqueeze(1)
@@ -770,10 +770,10 @@ class Symbolic_interval_proj2(Interval):
 		assert y.shape[0] == self.l.shape[0] == self.batch_size,\
 								"wrong label shape"
 		if(self.use_cuda):
-			kk = torch.eye(output_size, dtype=torch.uint8,\
+			kk = torch.eye(output_size, dtype=torch.bool,\
 				requires_grad=False, device=y.get_device())[y]
 		else:
-			kk = torch.eye(output_size, dtype=torch.uint8,\
+			kk = torch.eye(output_size, dtype=torch.bool,\
 					requires_grad=False)[y]
 
 		c_t = self.c.masked_select(kk).unsqueeze(1)
